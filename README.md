@@ -80,6 +80,19 @@ Public registration cannot choose or change a role. Sign in at `/login`, choose
 the appropriate workspace, and access will be checked against the role stored
 in PostgreSQL.
 
+### Managing accounts
+
+Administrators can view and search the latest accounts at `/admin/users`, then
+edit a user's name, email, phone number, profile image URL, or role. Changing an
+email address marks it unverified so it must be verified again.
+
+When a user requests a password reset, an administrator can issue a temporary
+password from the account directory. The temporary password is shown once and
+must be shared with the user through a trusted channel; it is not emailed.
+Issuing it signs the user out of their sessions and requires them to choose a
+new password after signing in. The administrator cannot reset their own
+password through this workflow.
+
 The portal pages still contain frontend previews; booking, referral, CMS, and
 restaurant data services have not been implemented.
 

@@ -6,10 +6,24 @@ import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import type { UserRole } from "@/types";
 
-const workspaces: { role: UserRole; label: string }[] = [
-  { role: "customer", label: "Customer" },
-  { role: "agent", label: "Agent" },
-  { role: "admin", label: "Admin" },
+const workspaces: {
+  role: UserRole;
+  label: string;
+  detail: string;
+  code: string;
+}[] = [
+  {
+    role: "customer",
+    label: "Customer",
+    detail: "Your bookings & profile",
+    code: "01",
+  },
+  {
+    role: "agent",
+    label: "Agent",
+    detail: "Referrals & enquiries",
+    code: "02",
+  },
 ];
 
 const rolePaths: Record<UserRole, string> = {
@@ -22,9 +36,15 @@ function isUserRole(role: string): role is UserRole {
   return role === "customer" || role === "agent" || role === "admin";
 }
 
-export function AuthForm({ mode }: { mode: "login" | "register" }) {
+export function AuthForm({
+  mode,
+  role: fixedRole,
+}: {
+  mode: "login" | "register";
+  role?: UserRole;
+}) {
   const router = useRouter();
-  const [role, setRole] = useState<UserRole>("customer");
+  const [role, setRole] = useState<UserRole>(fixedRole ?? "customer");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -85,17 +105,33 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   }
 
   return (
-    <section className="auth-card">
-      <p className="eyebrow">{isRegister ? "Join us" : "Welcome back"}</p>
-      <h1>{isRegister ? "Make yourself at home." : "Sign in to Camelot."}</h1>
+    <section
+      className={`auth-card${fixedRole === "admin" ? " admin-auth-card" : ""}`}
+    >
+      <p className="eyebrow">
+        {fixedRole === "admin"
+          ? "Administrator access"
+          : isRegister
+            ? "Your place at Camelot"
+            : "Welcome back"}
+      </p>
+      <h1>
+        {fixedRole === "admin"
+          ? "Admin sign in."
+          : isRegister
+            ? "Make yourself at home."
+            : "Sign in to Camelot."}
+      </h1>
       <p className="auth-intro">
-        {isRegister
-          ? "Create an account to keep your bookings and details together. The first account is the administrator; later accounts are customers."
-          : "Use the account assigned to your Camelot workspace."}
+        {fixedRole === "admin"
+          ? "Sign in with your administrator account to manage Camelot."
+          : isRegister
+            ? "Create an account to keep your bookings and details together."
+            : "Choose your account type to continue to your Camelot workspace."}
       </p>
 
-      {!isRegister && (
-        <div className="workspace-list" aria-label="Choose a workspace">
+      {!isRegister && !fixedRole && (
+        <div className="workspace-list" aria-label="Choose your account type">
           {workspaces.map((workspace) => (
             <button
               aria-pressed={role === workspace.role}
@@ -104,7 +140,12 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
               onClick={() => setRole(workspace.role)}
               type="button"
             >
-              <strong>{workspace.label}</strong>
+              <span className="workspace-code">{workspace.code}</span>
+              <span className="workspace-copy">
+                <strong>{workspace.label}</strong>
+                <small>{workspace.detail}</small>
+              </span>
+              <span className="workspace-check" aria-hidden="true" />
             </button>
           ))}
         </div>
@@ -179,18 +220,35 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         </button>
       </form>
 
-      {!isRegister && (
+      {!isRegister && fixedRole === "admin" && (
+        <p className="admin-auth-notice">
+          This sign-in is for authorized Camelot administrators.
+        </p>
+      )}
+      {!isRegister && !fixedRole && (
         <p className="auth-notice">
           Workspace choice only selects where to go after sign-in. Access is
           determined by the role assigned to your account.
         </p>
       )}
-      <p className="auth-switch">
-        {isRegister ? "Already have an account?" : "New to Camelot?"}{" "}
-        <Link href={isRegister ? "/login" : "/register"}>
-          {isRegister ? "Sign in" : "Create a customer account"}
-        </Link>
-      </p>
+      {!isRegister && !fixedRole && (
+        <p className="auth-admin-link">
+          Camelot administrator? <Link href="/admin/login">Admin sign in</Link>
+        </p>
+      )}
+      {fixedRole === "admin" ? (
+        <p className="auth-switch">
+          Need a customer or agent account?{" "}
+          <Link href="/login">Go to sign in</Link>
+        </p>
+      ) : (
+        <p className="auth-switch">
+          {isRegister ? "Already have an account?" : "New to Camelot?"}{" "}
+          <Link href={isRegister ? "/login" : "/register"}>
+            {isRegister ? "Sign in" : "Create a customer account"}
+          </Link>
+        </p>
+      )}
     </section>
   );
 }

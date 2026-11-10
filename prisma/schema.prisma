@@ -15,6 +15,10 @@ model User {
   image         String?
   phone         String?
   role          String    @default("customer")
+  banned        Boolean   @default(false)
+  banReason     String?
+  banExpires    DateTime?
+  passwordChangeRequired Boolean @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
@@ -31,6 +35,7 @@ model Session {
   updatedAt DateTime @updatedAt
   ipAddress String?
   userAgent String?
+  impersonatedBy String?
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 

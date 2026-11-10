@@ -19,6 +19,9 @@ export async function requireUserRole(expectedRole: UserRole) {
   });
 
   if (!session) {
+    if (expectedRole === "admin") {
+      redirect("/admin/login");
+    }
     redirect(`/login?role=${expectedRole}`);
   }
 
@@ -28,6 +31,28 @@ export async function requireUserRole(expectedRole: UserRole) {
   }
 
   if (role !== expectedRole) {
+    redirect(rolePaths[role]);
+  }
+
+  if (session.user.passwordChangeRequired) {
+    redirect("/change-password");
+  }
+}
+
+export async function requirePasswordChange() {
+  const session = await getAuth().api.getSession({
+    headers: await headers(),
+  });
+
+  if (!session) {
+    redirect("/login");
+  }
+
+  const role = session.user.role;
+  if (!isUserRole(role)) {
+    redirect("/login");
+  }
+  if (!session.user.passwordChangeRequired) {
     redirect(rolePaths[role]);
   }
 }

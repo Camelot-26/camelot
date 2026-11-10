@@ -2,6 +2,7 @@ import "server-only";
 
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { admin } from "better-auth/plugins";
 import { getPrisma } from "@/lib/prisma";
 
 function createAuth() {
@@ -20,6 +21,12 @@ function createAuth() {
     database: prismaAdapter(getPrisma(), {
       provider: "postgresql",
     }),
+    plugins: [
+      admin({
+        defaultRole: "customer",
+        adminRoles: ["admin"],
+      }),
+    ],
     emailAndPassword: {
       enabled: true,
     },
@@ -33,6 +40,12 @@ function createAuth() {
           type: "string",
           required: true,
           defaultValue: "customer",
+          input: false,
+        },
+        passwordChangeRequired: {
+          type: "boolean",
+          required: true,
+          defaultValue: false,
           input: false,
         },
       },
