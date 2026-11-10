@@ -1,0 +1,36 @@
+{
+  "name": "camelot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "predev": "npm run db:generate",
+    "build": "next build",
+    "prebuild": "npm run db:generate",
+    "start": "next start",
+    "lint": "eslint",
+    "db:generate": "prisma generate --config prisma7.config.ts",
+    "db:migrate": "prisma migrate dev --config prisma7.config.ts"
+  },
+  "dependencies": {
+    "@better-auth/prisma-adapter": "^1.7.18",
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "better-auth": "^1.7.18",
+    "next": "16.4.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "dotenv": "^18.0.10",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.5",
+    "prisma": "^7.10.1",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

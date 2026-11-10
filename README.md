@@ -1,0 +1,91 @@
+# Camelot
+
+Camelot is a Downtown Riverside dining and entertainment destination, with
+separate customer, agent, and admin workspace previews.
+
+## Getting started
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to view the site.
+
+## Application structure
+
+- `src/app/(public)` contains the public website: home, about, contact, and
+  experiences.
+- `src/app/(auth)` contains the login workspace selector and registration
+  entry point.
+- `src/app/(customer)`, `src/app/(agent)`, and `src/app/(admin)` contain the
+  role-specific portal pages.
+- `src/components/layout` contains shared site, portal, and page layouts.
+- `src/modules` contains initial domain types for users, bookings, referrals,
+  CMS content, and restaurant enquiries.
+- `src/types` contains shared application types.
+
+The route-group names in parentheses organize the code without appearing in
+the URL. For example, `src/app/(customer)/customer/dashboard/page.tsx` maps to
+`/customer/dashboard`.
+
+## Authentication and data
+
+The public homepage matches the current live Camelot design and uses its
+concept assets. Reservations, event enquiries, and product sales are shown as
+coming soon, consistent with the site's development status.
+
+The app uses PostgreSQL through Prisma and Better Auth for email/password
+authentication. Registration collects a name, email, optional phone number,
+and optional avatar image URL. The first account created in an empty database
+receives the admin role; later public registrations are customers. Agent roles
+must be assigned to existing users by an administrator. Portal layouts check
+the authenticated user's role before showing a workspace.
+
+### Local database setup
+
+1. In pgAdmin, create the `camelot_db` database owned by `ramankumar` and make
+   sure the PostgreSQL server is running.
+2. Copy the template and edit it locally:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Set your PostgreSQL password in `DATABASE_URL`, URL-encoding special
+   characters in the password. Do not commit or share `.env`.
+3. Generate an auth secret with `openssl rand -base64 32` and set
+   `BETTER_AUTH_SECRET` in `.env`. Keep `BETTER_AUTH_URL` as
+   `http://localhost:3000` for local development.
+4. Apply the database migration:
+
+   ```bash
+   npm run db:migrate
+   ```
+
+5. Keep the app private and start it with `npm run dev`. Use `/register` to
+   create the first admin account before making the app available to others.
+
+To grant an existing account the agent role, use pgAdmin's Query Tool after
+registration:
+
+```sql
+UPDATE "user"
+SET role = 'agent'
+WHERE email = 'your-admin-email@example.com'
+RETURNING id, email, role;
+```
+
+Public registration cannot choose or change a role. Sign in at `/login`, choose
+the appropriate workspace, and access will be checked against the role stored
+in PostgreSQL.
+
+The portal pages still contain frontend previews; booking, referral, CMS, and
+restaurant data services have not been implemented.
+
+## Checks
+
+```bash
+npm run lint
+npm run build
+```
