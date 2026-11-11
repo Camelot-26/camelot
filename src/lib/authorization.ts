@@ -37,6 +37,11 @@ export async function requireUserRole(expectedRole: UserRole) {
   if (session.user.passwordChangeRequired) {
     redirect("/change-password");
   }
+
+  return {
+    name: session.user.name,
+    image: session.user.image ?? null,
+  };
 }
 
 export async function requirePasswordChange() {

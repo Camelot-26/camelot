@@ -56,7 +56,10 @@ the authenticated user's role before showing a workspace.
    characters in the password. Do not commit or share `.env`.
 3. Generate an auth secret with `openssl rand -base64 32` and set
    `BETTER_AUTH_SECRET` in `.env`. Keep `BETTER_AUTH_URL` as
-   `http://localhost:3000` for local development.
+   `http://localhost:3000` for local development. Configure `SMTP_HOST`,
+   `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASSWORD` with your email provider's
+   SMTP settings. Set `SMTP_FROM` to a sender address verified by that provider;
+   the configured default is `admin@camelot.com`.
 4. Apply the database migration:
 
    ```bash
@@ -83,15 +86,30 @@ in PostgreSQL.
 ### Managing accounts
 
 Administrators can view and search the latest accounts at `/admin/users`, then
-edit a user's name, email, phone number, profile image URL, or role. Changing an
-email address marks it unverified so it must be verified again.
+view a user's profile and edit their name, email, phone number, profile image,
+or role. Profile images can be uploaded (PNG, JPEG, or WebP, up to 512 KB) or
+provided as an image URL. Changing an email address marks it unverified so it
+must be verified again.
+
+Uploaded avatars for customer, agent, and admin accounts use the reusable
+server-side image storage service. Local development uses the local provider by
+default and stores files in `.data/user-images`; the directory is excluded from
+version control. `USER_IMAGE_STORAGE_PROVIDER` defaults to `local`, so no
+storage credentials are required. The optional `USER_IMAGE_STORAGE_DIR`
+environment variable can point to a persistent local volume.
+
+The image key is saved as a path in PostgreSQL through Prisma and images are
+served by `/api/user-images/<filename>`. A future object-storage provider can
+be added behind the same storage interface without changing account actions or
+the image route. Deployments using local storage must attach a persistent,
+writable volume at the storage directory.
 
 When a user requests a password reset, an administrator can issue a temporary
-password from the account directory. The temporary password is shown once and
-must be shared with the user through a trusted channel; it is not emailed.
-Issuing it signs the user out of their sessions and requires them to choose a
-new password after signing in. The administrator cannot reset their own
-password through this workflow.
+password from the account directory, either automatically generated or entered
+manually. The password is emailed to the address on the account, all sessions
+are revoked, and the user must choose a new password after signing in. SMTP
+must be configured before this workflow can be used. The administrator cannot
+reset their own password through this workflow.
 
 The portal pages still contain frontend previews; booking, referral, CMS, and
 restaurant data services have not been implemented.

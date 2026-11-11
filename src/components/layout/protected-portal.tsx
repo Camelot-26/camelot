@@ -6,9 +6,9 @@ export async function ProtectedPortal({
   children,
   role,
 }: {
-  children: ReactNode;
+  children: (user: { name: string; image: string | null }) => ReactNode;
   role: UserRole;
 }) {
-  await requireUserRole(role);
-  return children;
+  const user = await requireUserRole(role);
+  return children(user);
 }

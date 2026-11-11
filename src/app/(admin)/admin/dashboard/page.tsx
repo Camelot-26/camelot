@@ -78,7 +78,7 @@ async function AdminDashboardData() {
       <section className="admin-dashboard-welcome">
         <div>
           <p className="eyebrow">Admin overview</p>
-          <h1>Good to see you.</h1>
+          <h1>Administrator Dashboard</h1>
           <p>Here’s what’s happening across your Camelot workspace.</p>
         </div>
         <Link className="button button-dark admin-dashboard-primary" href="/admin/users">

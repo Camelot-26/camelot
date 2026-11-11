@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Image from "next/image";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   issueTemporaryPassword,
@@ -18,24 +19,43 @@ type AdminUser = {
   createdAt: string;
 };
 
-type TemporaryPassword = {
-  user: AdminUser;
-  value: string;
-  sessionsRevoked: boolean;
-};
+type TemporaryPassword =
+  | {
+      user: AdminUser;
+      emailSent: true;
+      sessionsRevoked: boolean;
+    }
+  | {
+      user: AdminUser;
+      emailSent: false;
+      sessionsRevoked: boolean;
+      message: string;
+    };
 
 export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [role, setRole] = useState("all");
+  const [viewingUser, setViewingUser] = useState<AdminUser | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState("");
+  const [uploadedProfileImage, setUploadedProfileImage] = useState("");
+  const [readingProfileImage, setReadingProfileImage] = useState(false);
   const [editError, setEditError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [resettingUserId, setResettingUserId] = useState("");
-  const [passwordResult, setPasswordResult] =
-    useState<TemporaryPassword | null>(null);
+  const [passwordTarget, setPasswordTarget] = useState<AdminUser | null>(null);
+  const [passwordMode, setPasswordMode] = useState<"generated" | "manual">(
+    "generated",
+  );
+  const [manualPassword, setManualPassword] = useState("");
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [passwordResult, setPasswordResult] = useState<TemporaryPassword | null>(
+    null,
+  );
   const [passwordError, setPasswordError] = useState("");
-  const [copyMessage, setCopyMessage] = useState("");
+  const imageUrlInputRef = useRef<HTMLInputElement>(null);
+  const imageFileInputRef = useRef<HTMLInputElement>(null);
+  const imageReaderRef = useRef<FileReader | null>(null);
 
   const filteredUsers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -51,7 +71,7 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
 
   async function saveUser(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!editingUser) return;
+    if (!editingUser || readingProfileImage) return;
 
     const formData = new FormData(event.currentTarget);
     setSaving(true);
@@ -62,7 +82,8 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
         name: String(formData.get("name") ?? ""),
         email: String(formData.get("email") ?? ""),
         phone: String(formData.get("phone") ?? ""),
-        image: String(formData.get("image") ?? ""),
+        image:
+          uploadedProfileImage || String(formData.get("image") ?? ""),
         role: String(formData.get("role") ?? "") as UserRole,
       });
       if (!result.success) {
@@ -79,43 +100,130 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
     }
   }
 
-  async function resetPassword(user: AdminUser) {
+  function openEditUser(user: AdminUser) {
+    imageReaderRef.current?.abort();
+    imageReaderRef.current = null;
+    if (imageFileInputRef.current) imageFileInputRef.current.value = "";
+    setEditingUser(user);
+    setProfileImagePreview(user.image ?? "");
+    setUploadedProfileImage(
+      user.image?.startsWith("data:image/") ? user.image : "",
+    );
+    setReadingProfileImage(false);
+    setEditError("");
+  }
+
+  function handleProfileImageChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.currentTarget.files?.[0];
+    if (!file) return;
+
+    const supportedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!supportedTypes.includes(file.type)) {
+      setEditError("Choose a PNG, JPEG, or WebP image.");
+      event.currentTarget.value = "";
+      return;
+    }
+    if (file.size > 512 * 1024) {
+      setEditError("Choose an image smaller than 512 KB.");
+      event.currentTarget.value = "";
+      return;
+    }
+
+    imageReaderRef.current?.abort();
+    setReadingProfileImage(true);
+    setEditError("");
+    const reader = new FileReader();
+    imageReaderRef.current = reader;
+    reader.onload = () => {
+      if (imageReaderRef.current !== reader) return;
+      imageReaderRef.current = null;
+      setReadingProfileImage(false);
+      if (typeof reader.result !== "string") {
+        setEditError("We couldn’t read that image. Please try another file.");
+        return;
+      }
+
+      setUploadedProfileImage(reader.result);
+      setProfileImagePreview(reader.result);
+      setEditError("");
+    };
+    reader.onerror = () => {
+      if (imageReaderRef.current !== reader) return;
+      imageReaderRef.current = null;
+      setReadingProfileImage(false);
+      setEditError("We couldn’t read that image. Please try another file.");
+    };
+    reader.onabort = () => {
+      if (imageReaderRef.current !== reader) return;
+      imageReaderRef.current = null;
+      setReadingProfileImage(false);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function removeProfileImage() {
+    imageReaderRef.current?.abort();
+    imageReaderRef.current = null;
+    setReadingProfileImage(false);
+    setProfileImagePreview("");
+    setUploadedProfileImage("");
+    if (imageUrlInputRef.current) imageUrlInputRef.current.value = "";
+    if (imageFileInputRef.current) imageFileInputRef.current.value = "";
+  }
+
+  function openPasswordReset(user: AdminUser) {
+    setPasswordTarget(user);
+    setPasswordMode("generated");
+    setManualPassword("");
+    setPasswordError("");
+  }
+
+  async function resetPassword(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!passwordTarget) return;
+
+    const user = passwordTarget;
     const confirmed = window.confirm(
-      `Confirm that ${user.name} requested a password reset. This will sign them out of all devices and create a temporary password to share with them.`,
+      `Confirm that ${user.name} requested a password reset. A temporary password will be emailed to ${user.email}, and they will be signed out of all devices.`,
     );
     if (!confirmed) return;
 
-    setResettingUserId(user.id);
+    setResettingPassword(true);
     setPasswordError("");
     setPasswordResult(null);
-    setCopyMessage("");
     try {
-      const result = await issueTemporaryPassword(user.id);
+      const result = await issueTemporaryPassword(
+        user.id,
+        passwordMode === "manual" ? manualPassword : null,
+      );
       if (!result.success) {
-        setPasswordError(result.message);
+        if (result.passwordWasSet) {
+          setPasswordTarget(null);
+          setPasswordResult({
+            user,
+            emailSent: false,
+            sessionsRevoked: result.sessionsRevoked ?? false,
+            message: result.message,
+          });
+          router.refresh();
+        } else {
+          setPasswordError(result.message);
+        }
         return;
       }
       setPasswordResult({
         user,
-        value: result.temporaryPassword,
+        emailSent: true,
         sessionsRevoked: result.sessionsRevoked,
       });
+      setPasswordTarget(null);
+      router.refresh();
     } catch {
-      setPasswordError(
-        "We couldn’t reset this password. Please try again or contact support.",
-      );
+      setPasswordError("We couldn’t complete the reset. Please try again.");
     } finally {
-      setResettingUserId("");
-    }
-  }
-
-  async function copyPassword() {
-    if (!passwordResult) return;
-    try {
-      await navigator.clipboard.writeText(passwordResult.value);
-      setCopyMessage("Temporary password copied.");
-    } catch {
-      setCopyMessage("Couldn’t copy automatically. Select and copy the password.");
+      setResettingPassword(false);
     }
   }
 
@@ -145,11 +253,6 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
           {filteredUsers.length} {filteredUsers.length === 1 ? "account" : "accounts"}
         </span>
       </div>
-      {passwordError && (
-        <p className="admin-directory-error" role="alert">
-          {passwordError}
-        </p>
-      )}
       {filteredUsers.length > 0 ? (
         <div className="admin-directory-table-wrap">
           <table className="admin-directory-table">
@@ -165,9 +268,30 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
               {filteredUsers.map((user) => (
                 <tr key={user.id}>
                   <td>
-                    <strong>{user.name}</strong>
-                    <span>{user.email}</span>
-                    {user.phone && <span>{user.phone}</span>}
+                    <div className="admin-directory-identity">
+                      {user.image ? (
+                        <Image
+                          alt=""
+                          className="admin-directory-avatar"
+                          height={38}
+                          src={user.image}
+                          unoptimized
+                          width={38}
+                        />
+                      ) : (
+                        <span
+                          aria-hidden="true"
+                          className="admin-directory-avatar-fallback"
+                        >
+                          {user.name.trim().slice(0, 1).toUpperCase() || "U"}
+                        </span>
+                      )}
+                      <div className="admin-directory-identity-copy">
+                        <strong>{user.name}</strong>
+                        <span>{user.email}</span>
+                        {user.phone && <span>{user.phone}</span>}
+                      </div>
+                    </div>
                   </td>
                   <td>
                     <span className={`admin-role-badge admin-role-${user.role}`}>
@@ -187,21 +311,24 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
                     <div className="admin-directory-actions">
                       <button
                         className="admin-directory-action"
-                        onClick={() => {
-                          setEditingUser(user);
-                          setEditError("");
-                        }}
+                        onClick={() => setViewingUser(user)}
+                        type="button"
+                      >
+                        View
+                      </button>
+                      <button
+                        className="admin-directory-action"
+                        onClick={() => openEditUser(user)}
                         type="button"
                       >
                         Edit
                       </button>
                       <button
                         className="admin-directory-action"
-                        disabled={resettingUserId === user.id}
-                        onClick={() => void resetPassword(user)}
+                        onClick={() => openPasswordReset(user)}
                         type="button"
                       >
-                        {resettingUserId === user.id ? "Resetting…" : "Reset password"}
+                        Reset password
                       </button>
                     </div>
                   </td>
@@ -224,6 +351,102 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
         <p className="admin-directory-limit">
           Showing the 100 most recently created accounts.
         </p>
+      )}
+
+      {viewingUser && (
+        <div
+          className="admin-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setViewingUser(null);
+            }
+          }}
+        >
+          <section
+            aria-labelledby="admin-view-title"
+            aria-modal="true"
+            className="admin-modal admin-user-view-modal"
+            role="dialog"
+          >
+            <div className="admin-modal-heading">
+              <div>
+                <p className="eyebrow">Account details</p>
+                <h2 id="admin-view-title">User profile</h2>
+              </div>
+              <button
+                aria-label="Close user details"
+                className="admin-modal-close"
+                onClick={() => setViewingUser(null)}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+            <div className="admin-user-view-profile">
+              {viewingUser.image ? (
+                <Image
+                  alt={`${viewingUser.name}'s profile`}
+                  className="admin-user-view-avatar"
+                  height={80}
+                  src={viewingUser.image}
+                  unoptimized
+                  width={80}
+                />
+              ) : (
+                <span aria-hidden="true" className="admin-user-view-avatar-fallback">
+                  {viewingUser.name.slice(0, 1).toUpperCase()}
+                </span>
+              )}
+              <div>
+                <h3>{viewingUser.name}</h3>
+                <span
+                  className={`admin-role-badge admin-role-${viewingUser.role}`}
+                >
+                  {viewingUser.role}
+                </span>
+              </div>
+            </div>
+            <dl className="admin-user-view-details">
+              <div>
+                <dt>Email address</dt>
+                <dd>{viewingUser.email}</dd>
+              </div>
+              <div>
+                <dt>Phone number</dt>
+                <dd>{viewingUser.phone || "Not provided"}</dd>
+              </div>
+              <div>
+                <dt>Joined</dt>
+                <dd>
+                  {new Date(viewingUser.createdAt).toLocaleDateString("en-US", {
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </dd>
+              </div>
+            </dl>
+            <div className="admin-modal-actions">
+              <button
+                className="admin-modal-cancel"
+                onClick={() => setViewingUser(null)}
+                type="button"
+              >
+                Close
+              </button>
+              <button
+                className="button button-dark"
+                onClick={() => {
+                  setViewingUser(null);
+                  openEditUser(viewingUser);
+                }}
+                type="button"
+              >
+                Edit user
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       {editingUser && (
@@ -288,16 +511,56 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
                   type="tel"
                 />
               </label>
-              <label>
-                Profile image URL
-                <input
-                  autoComplete="url"
-                  defaultValue={editingUser.image ?? ""}
-                  maxLength={2048}
-                  name="image"
-                  type="url"
-                />
-              </label>
+              <div className="admin-profile-image-editor">
+                <label>
+                  Profile image URL
+                  <input
+                    autoComplete="url"
+                    defaultValue={editingUser.image?.startsWith("data:")
+                      ? ""
+                      : editingUser.image ?? ""}
+                    maxLength={2048}
+                    name="image"
+                    ref={imageUrlInputRef}
+                    onChange={(event) => {
+                      imageReaderRef.current?.abort();
+                      imageReaderRef.current = null;
+                      setReadingProfileImage(false);
+                      setUploadedProfileImage("");
+                      setProfileImagePreview(event.currentTarget.value);
+                    }}
+                    type="text"
+                  />
+                </label>
+                <label>
+                  Upload profile image
+                  <input
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleProfileImageChange}
+                    ref={imageFileInputRef}
+                    type="file"
+                  />
+                  <small>PNG, JPEG, or WebP. Maximum file size: 512 KB.</small>
+                </label>
+                {profileImagePreview && (
+                  <div className="admin-profile-image-preview">
+                    <Image
+                      alt="Profile image preview"
+                      height={72}
+                      src={profileImagePreview}
+                      unoptimized
+                      width={72}
+                    />
+                    <button
+                      className="admin-directory-action"
+                      onClick={removeProfileImage}
+                      type="button"
+                    >
+                      Remove image
+                    </button>
+                  </div>
+                )}
+              </div>
               <label>
                 Account type
                 <select defaultValue={editingUser.role} name="role">
@@ -314,14 +577,21 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
               <div className="admin-modal-actions">
                 <button
                   className="admin-modal-cancel"
-                  disabled={saving}
+                  disabled={saving || readingProfileImage}
                   onClick={() => setEditingUser(null)}
                   type="button"
                 >
                   Cancel
                 </button>
-                <button className="button button-dark" disabled={saving}>
-                  {saving ? "Saving…" : "Save changes"}
+                <button
+                  className="button button-dark"
+                  disabled={saving || readingProfileImage}
+                >
+                  {readingProfileImage
+                    ? "Reading image…"
+                    : saving
+                      ? "Saving…"
+                      : "Save changes"}
                 </button>
               </div>
             </form>
@@ -340,7 +610,9 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
             <div className="admin-modal-heading">
               <div>
                 <p className="eyebrow">Password reset</p>
-                <h2 id="admin-password-title">Temporary password</h2>
+                <h2 id="admin-password-title">
+                  {passwordResult.emailSent ? "Email sent" : "Email not sent"}
+                </h2>
               </div>
               <button
                 aria-label="Close password details"
@@ -354,23 +626,20 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
             <p className="admin-password-recipient">
               For {passwordResult.user.name} · {passwordResult.user.email}
             </p>
-            <label className="admin-temporary-password">
-              Temporary password
-              <input readOnly value={passwordResult.value} />
-            </label>
-            {!passwordResult.sessionsRevoked && (
+            {passwordResult.emailSent ? (
+              <p className="admin-password-warning">
+                The temporary password was emailed. The user must choose a new
+                password after signing in.
+              </p>
+            ) : (
               <p className="admin-directory-error" role="alert">
-                The password was changed, but existing sessions could not be revoked.
-                Contact support to secure this account.
+                {passwordResult.message}
               </p>
             )}
-            <p className="admin-password-warning">
-              Share this password directly using a trusted channel. The user will
-              be prompted to choose a new password when they sign in.
-            </p>
-            {copyMessage && (
-              <p className="admin-copy-message" role="status">
-                {copyMessage}
+            {passwordResult.emailSent && !passwordResult.sessionsRevoked && (
+              <p className="admin-directory-error" role="alert">
+                The password was changed and emailed, but existing sessions could
+                not be revoked. Contact support to secure this account.
               </p>
             )}
             <div className="admin-modal-actions">
@@ -381,14 +650,107 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
               >
                 Close
               </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {passwordTarget && (
+        <div
+          className="admin-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !resettingPassword) {
+              setPasswordTarget(null);
+            }
+          }}
+        >
+          <section
+            aria-labelledby="admin-password-reset-title"
+            aria-modal="true"
+            className="admin-modal admin-password-modal"
+            role="dialog"
+          >
+            <div className="admin-modal-heading">
+              <div>
+                <p className="eyebrow">Password reset</p>
+                <h2 id="admin-password-reset-title">Email a temporary password</h2>
+              </div>
               <button
-                className="button button-dark"
-                onClick={() => void copyPassword()}
+                aria-label="Close password reset form"
+                className="admin-modal-close"
+                disabled={resettingPassword}
+                onClick={() => setPasswordTarget(null)}
                 type="button"
               >
-                Copy password
+                ×
               </button>
             </div>
+            <p className="admin-password-recipient">
+              For {passwordTarget.name} · {passwordTarget.email}
+            </p>
+            <form className="admin-user-edit-form" onSubmit={resetPassword}>
+              <fieldset className="admin-password-options">
+                <legend>Temporary password</legend>
+                <label className="admin-password-option">
+                  <input
+                    checked={passwordMode === "generated"}
+                    name="passwordMode"
+                    onChange={() => setPasswordMode("generated")}
+                    type="radio"
+                  />
+                  <span>Generate a secure password automatically</span>
+                </label>
+                <label className="admin-password-option">
+                  <input
+                    checked={passwordMode === "manual"}
+                    name="passwordMode"
+                    onChange={() => setPasswordMode("manual")}
+                    type="radio"
+                  />
+                  <span>Enter a password manually</span>
+                </label>
+              </fieldset>
+              {passwordMode === "manual" && (
+                <label>
+                  Temporary password
+                  <input
+                    autoComplete="new-password"
+                    maxLength={128}
+                    minLength={12}
+                    onChange={(event) => setManualPassword(event.target.value)}
+                    required
+                    type="password"
+                    value={manualPassword}
+                  />
+                  <span className="admin-password-hint">
+                    Use at least 12 characters. The user will be asked to change
+                    it after signing in.
+                  </span>
+                </label>
+              )}
+              <p className="admin-password-warning">
+                The password will be sent to this account’s email address. Their
+                active sessions will be revoked.
+              </p>
+              {passwordError && (
+                <p className="admin-directory-error" role="alert">
+                  {passwordError}
+                </p>
+              )}
+              <div className="admin-modal-actions">
+                <button
+                  className="admin-modal-cancel"
+                  disabled={resettingPassword}
+                  onClick={() => setPasswordTarget(null)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button className="button button-dark" disabled={resettingPassword}>
+                  {resettingPassword ? "Sending…" : "Reset and email"}
+                </button>
+              </div>
+            </form>
           </section>
         </div>
       )}
