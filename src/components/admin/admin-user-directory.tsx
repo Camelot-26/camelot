@@ -36,6 +36,8 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [role, setRole] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [viewingUser, setViewingUser] = useState<AdminUser | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState("");
@@ -68,6 +70,16 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
       return matchesRole && matchesQuery;
     });
   }, [query, role, users]);
+  const pageCount = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageUsers = useMemo(
+    () => filteredUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [currentPage, filteredUsers, pageSize],
+  );
+  const firstRecord = filteredUsers.length
+    ? (currentPage - 1) * pageSize + 1
+    : 0;
+  const lastRecord = Math.min(currentPage * pageSize, filteredUsers.length);
 
   async function saveUser(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -234,7 +246,10 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
           <span className="sr-only">Search accounts</span>
           <span aria-hidden="true">⌕</span>
           <input
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
             placeholder="Search name or email"
             type="search"
             value={query}
@@ -242,7 +257,13 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
         </label>
         <label className="admin-directory-filter">
           <span className="sr-only">Filter by account type</span>
-          <select onChange={(event) => setRole(event.target.value)} value={role}>
+          <select
+            onChange={(event) => {
+              setRole(event.target.value);
+              setPage(1);
+            }}
+            value={role}
+          >
             <option value="all">All account types</option>
             <option value="customer">Customers</option>
             <option value="agent">Agents</option>
@@ -265,7 +286,7 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.map((user) => (
+              {pageUsers.map((user) => (
                 <tr key={user.id}>
                   <td>
                     <div className="admin-directory-identity">
@@ -347,6 +368,47 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
           </p>
         </div>
       )}
+      <div className="admin-directory-pagination">
+        <label>
+          Records per page
+          <select
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(1);
+            }}
+            value={pageSize}
+          >
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </label>
+        <span aria-live="polite" className="admin-directory-page-range">
+          Showing {firstRecord}–{lastRecord} of {filteredUsers.length}
+        </span>
+        <div className="admin-directory-page-navigation">
+          <span>
+            Page {currentPage} of {pageCount}
+          </span>
+          <button
+            aria-label="Previous page"
+            disabled={currentPage === 1}
+            onClick={() => setPage(currentPage - 1)}
+            type="button"
+          >
+            Previous
+          </button>
+          <button
+            aria-label="Next page"
+            disabled={currentPage === pageCount}
+            onClick={() => setPage(currentPage + 1)}
+            type="button"
+          >
+            Next
+          </button>
+        </div>
+      </div>
       {users.length === 100 && (
         <p className="admin-directory-limit">
           Showing the 100 most recently created accounts.

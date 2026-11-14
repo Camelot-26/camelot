@@ -7,7 +7,7 @@ import { SignOutButton } from "@/components/layout/sign-out-button";
 import type { UserRole } from "@/types";
 
 type NavigationItem = {
-  href: string;
+  href?: string;
   label: string;
 };
 
@@ -84,9 +84,12 @@ function AdminNavigationIconView({ icon }: { icon: AdminNavigationIcon }) {
 
 const navigation: Record<Exclude<UserRole, "admin">, NavigationItem[]> = {
   customer: [
-    { href: "/customer/dashboard", label: "Overview" },
-    { href: "/customer/bookings", label: "Bookings" },
-    { href: "/customer/profile", label: "Profile" },
+    { href: "/customer/dashboard", label: "Dashboard" },
+    { href: "/customer/bookings", label: "My Bookings" },
+    { href: "/customer/enquiries", label: "My Enquiries" },
+    { href: "/customer/events", label: "My Events" },
+    { label: "Notifications" },
+    { href: "/customer/profile", label: "My Profile" },
   ],
   agent: [
     { href: "/agent/dashboard", label: "Overview" },
@@ -107,9 +110,10 @@ const adminNavigation: AdminNavigationSection[] = [
     icon: "booking",
     label: "Operations",
     items: [
-      { href: "/admin/bookings", icon: "booking", label: "Bookings" },
-      { icon: "mail", label: "Enquiries" },
-      { icon: "calendar", label: "Events" },
+      { href: "/admin/bookings", icon: "booking", label: "Booking" },
+      { href: "/admin/enquiries", icon: "mail", label: "Enquiry" },
+      { href: "/admin/event-categories", icon: "category", label: "Event Category" },
+      { href: "/admin/events", icon: "calendar", label: "Events" },
     ],
   },
   {
@@ -346,15 +350,26 @@ export function PortalNavigation({
                   </section>
                 );
               })
-            : navigation[role].map((item) => (
-                <Link
-                  href={item.href}
-                  key={item.href}
-                  onClick={() => setMenuOpen(false)}
-                >
-                  {item.label}
-                </Link>
-              ))}
+            : navigation[role].map((item) =>
+                item.href ? (
+                  <Link
+                    href={item.href}
+                    key={item.label}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    {item.label}
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className="portal-nav-disabled"
+                    key={item.label}
+                  >
+                    <span className="portal-nav-disabled-label">{item.label}</span>
+                    <small>Coming soon</small>
+                  </span>
+                ),
+              )}
         </nav>
         <SignOutButton
           collapsed={role === "admin" && isSidebarCollapsed}

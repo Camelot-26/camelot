@@ -8,36 +8,460 @@ datasource db {
 }
 
 model User {
-  id            String    @id
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
-  phone         String?
-  role          String    @default("customer")
-  banned        Boolean   @default(false)
-  banReason     String?
-  banExpires    DateTime?
-  passwordChangeRequired Boolean @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
+  id                          String                       @id
+  name                        String
+  email                       String                       @unique
+  emailVerified               Boolean                      @default(false)
+  image                       String?
+  phone                       String?
+  role                        String                       @default("customer")
+  banned                      Boolean                      @default(false)
+  banReason                   String?
+  banExpires                  DateTime?
+  passwordChangeRequired      Boolean                      @default(false)
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  sessions                    Session[]
+  accounts                    Account[]
+  bookingsAsCustomer          Booking[]                    @relation("booking_customer")
+  bookingsAssigned            Booking[]                    @relation("booking_assigned_agent")
+  bookingsCreated             Booking[]                    @relation("booking_created_by")
+  bookingStatusChanges        BookingStatusHistory[]       @relation("booking_status_updated_by")
+  bookingCancellationRequests BookingCancellationRequest[] @relation("booking_cancellation_customer")
+  enquiriesAsCustomer         Enquiry[]                    @relation("enquiry_customer")
+  enquiriesAssigned           Enquiry[]                    @relation("enquiry_assigned_agent")
+  enquiriesAssignedBy         Enquiry[]                    @relation("enquiry_assigned_by")
+  enquiriesCreated            Enquiry[]                    @relation("enquiry_created_by")
+  enquiryStatusChanges        EnquiryStatusHistory[]       @relation("enquiry_status_changed_by")
+  enquiryActivities           EnquiryActivity[]            @relation("enquiry_activity_created_by")
+  enquiryFollowups            EnquiryFollowup[]            @relation("enquiry_followup_created_by")
+  eventsAsCustomer            Event[]                      @relation("event_customer")
+  eventsCoordinated           Event[]                      @relation("event_coordinator")
+  eventsAssigned              Event[]                      @relation("event_assigned_agent")
+  eventsAssignedBy            Event[]                      @relation("event_assigned_by")
+  eventsCreated               Event[]                      @relation("event_created_by")
+  eventStatusChanges          EventStatusHistory[]         @relation("event_status_changed_by")
+  eventActivities             EventActivity[]              @relation("event_activity_created_by")
+  eventTasksAssigned          EventChecklistItem[]         @relation("event_task_assignee")
+  eventTasksCompleted         EventChecklistItem[]         @relation("event_task_completed_by")
+  eventTasksCreated           EventChecklistItem[]         @relation("event_task_created_by")
+  eventAssignmentsMade        EventAssignmentHistory[]     @relation("event_assignment_changed_by")
+  eventPreviousCoordinations  EventAssignmentHistory[]     @relation("event_assignment_previous_coordinator")
+  eventNewCoordinations       EventAssignmentHistory[]     @relation("event_assignment_new_coordinator")
+  eventPreviousAgents         EventAssignmentHistory[]     @relation("event_assignment_previous_agent")
+  eventNewAgents              EventAssignmentHistory[]     @relation("event_assignment_new_agent")
 
   @@map("user")
 }
 
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  REJECTED
+  NO_SHOW
+}
+
+enum BookingCancellationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EnquiryStatus {
+  NEW
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_CUSTOMER
+  FOLLOW_UP_REQUIRED
+  CONVERTED
+  CLOSED
+  LOST
+}
+
+enum EnquiryPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum EnquiryFollowupStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+model Booking {
+  id                   String                       @id
+  bookingNumber        String                       @unique @map("booking_number")
+  customerId           String                       @map("customer_id")
+  bookingType          String                       @map("booking_type")
+  bookingDate          DateTime                     @map("booking_date") @db.Date
+  bookingTime          String                       @map("booking_time") @db.VarChar(5)
+  adults               Int
+  children             Int                          @default(0)
+  occasion             String?
+  specialRequests      String?                      @map("special_requests") @db.Text
+  additionalNotes      String?                      @map("additional_notes") @db.Text
+  assignedAgentId      String?                      @map("assigned_agent_id")
+  assignedAt           DateTime?                    @map("assigned_at")
+  internalNotes        String?                      @map("internal_notes") @db.Text
+  status               BookingStatus                @default(PENDING)
+  createdById          String                       @map("created_by")
+  deletedAt            DateTime?                    @map("deleted_at")
+  createdAt            DateTime                     @default(now()) @map("created_at")
+  updatedAt            DateTime                     @updatedAt @map("updated_at")
+  customer             User                         @relation("booking_customer", fields: [customerId], references: [id], onDelete: Restrict)
+  assignedAgent        User?                        @relation("booking_assigned_agent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  createdBy            User                         @relation("booking_created_by", fields: [createdById], references: [id], onDelete: Restrict)
+  statusHistory        BookingStatusHistory[]
+  cancellationRequests BookingCancellationRequest[]
+  enquiries            Enquiry[]
+  events               Event[]                      @relation("event_booking")
+
+  @@index([customerId])
+  @@index([assignedAgentId])
+  @@index([createdById])
+  @@index([status])
+  @@index([bookingType])
+  @@index([bookingDate])
+  @@index([bookingDate, status])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("booking")
+}
+
+model BookingCancellationRequest {
+  id         String                           @id
+  bookingId  String                           @map("booking_id")
+  customerId String                           @map("customer_id")
+  reason     String                           @db.Text
+  status     BookingCancellationRequestStatus @default(PENDING)
+  createdAt  DateTime                         @default(now()) @map("created_at")
+  updatedAt  DateTime                         @updatedAt @map("updated_at")
+  booking    Booking                          @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  customer   User                             @relation("booking_cancellation_customer", fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([bookingId, status])
+  @@index([customerId, createdAt])
+  @@map("booking_cancellation_request")
+}
+
+model Enquiry {
+  id                  String                 @id
+  enquiryNumber       String                 @unique @map("enquiry_number")
+  customerId          String?                @map("customer_id")
+  customerName        String                 @map("customer_name")
+  customerEmail       String?                @map("customer_email")
+  customerPhone       String?                @map("customer_phone")
+  subject             String
+  enquiryType         String                 @map("enquiry_type")
+  description         String                 @db.Text
+  eventCategoryId     String?                @map("event_category_id")
+  preferredEventDate  DateTime?              @map("preferred_event_date") @db.Date
+  eventExpectedGuests Int?                   @map("event_expected_guests")
+  source              String
+  priority            EnquiryPriority        @default(MEDIUM)
+  status              EnquiryStatus          @default(NEW)
+  assignedAgentId     String?                @map("assigned_agent_id")
+  assignedById        String?                @map("assigned_by")
+  assignedAt          DateTime?              @map("assigned_at")
+  internalNotes       String?                @map("internal_notes") @db.Text
+  nextFollowUpAt      DateTime?              @map("next_follow_up_at")
+  convertedBookingId  String?                @unique @map("converted_booking_id")
+  createdById         String                 @map("created_by")
+  deletedAt           DateTime?              @map("deleted_at")
+  createdAt           DateTime               @default(now()) @map("created_at")
+  updatedAt           DateTime               @updatedAt @map("updated_at")
+  customer            User?                  @relation("enquiry_customer", fields: [customerId], references: [id], onDelete: SetNull)
+  eventCategory       EventCategory?         @relation("enquiry_event_category", fields: [eventCategoryId], references: [id], onDelete: Restrict)
+  assignedAgent       User?                  @relation("enquiry_assigned_agent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  assignedBy          User?                  @relation("enquiry_assigned_by", fields: [assignedById], references: [id], onDelete: SetNull)
+  createdBy           User                   @relation("enquiry_created_by", fields: [createdById], references: [id], onDelete: Restrict)
+  convertedBooking    Booking?               @relation(fields: [convertedBookingId], references: [id], onDelete: Restrict)
+  statusHistory       EnquiryStatusHistory[]
+  activities          EnquiryActivity[]
+  followups           EnquiryFollowup[]
+  events              Event[]                @relation("event_enquiry")
+
+  @@index([customerId])
+  @@index([eventCategoryId, preferredEventDate])
+  @@index([assignedAgentId])
+  @@index([assignedById])
+  @@index([createdById])
+  @@index([status])
+  @@index([priority])
+  @@index([enquiryType])
+  @@index([createdAt])
+  @@index([nextFollowUpAt])
+  @@index([deletedAt])
+  @@map("enquiry")
+}
+
+model EnquiryStatusHistory {
+  id             String         @id
+  enquiryId      String         @map("enquiry_id")
+  previousStatus EnquiryStatus? @map("previous_status")
+  newStatus      EnquiryStatus  @map("new_status")
+  remarks        String?        @db.Text
+  changedById    String?        @map("changed_by")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  enquiry        Enquiry        @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  changedBy      User?          @relation("enquiry_status_changed_by", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([enquiryId, createdAt])
+  @@index([changedById])
+  @@map("enquiry_status_history")
+}
+
+model EnquiryFollowup {
+  id            String                @id
+  enquiryId     String                @map("enquiry_id")
+  scheduledDate DateTime              @map("scheduled_date") @db.Date
+  scheduledTime String?               @map("scheduled_time") @db.VarChar(5)
+  notes         String?               @db.Text
+  status        EnquiryFollowupStatus @default(SCHEDULED)
+  completedAt   DateTime?             @map("completed_at")
+  createdById   String                @map("created_by")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+  enquiry       Enquiry               @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  createdBy     User                  @relation("enquiry_followup_created_by", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([enquiryId, scheduledDate])
+  @@index([enquiryId, status, scheduledDate])
+  @@index([status, scheduledDate])
+  @@index([createdById])
+  @@map("enquiry_followups")
+}
+
+model EnquiryActivity {
+  id           String   @id
+  enquiryId    String   @map("enquiry_id")
+  activityType String   @map("activity_type")
+  description  String   @db.Text
+  createdById  String?  @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  enquiry      Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  createdBy    User?    @relation("enquiry_activity_created_by", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([enquiryId, createdAt])
+  @@index([createdById])
+  @@map("enquiry_activities")
+}
+
+enum EventStatus {
+  DRAFT
+  PENDING_APPROVAL
+  CONFIRMED
+  IN_PREPARATION
+  READY
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum EventTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum EventTaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model EventCategory {
+  id        String    @id
+  name      String    @unique
+  slug      String    @unique
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  events    Event[]
+  enquiries Enquiry[] @relation("enquiry_event_category")
+
+  @@index([isActive, name])
+  @@map("event_categories")
+}
+
+model Event {
+  id                        String                   @id
+  eventNumber               String                   @unique @map("event_number")
+  name                      String
+  categoryId                String                   @map("category_id")
+  description               String                   @db.Text
+  eventDate                 DateTime                 @map("event_date") @db.Date
+  setupStartTime            String                   @map("setup_start_time") @db.VarChar(5)
+  startTime                 String                   @map("start_time") @db.VarChar(5)
+  endTime                   String                   @map("end_time") @db.VarChar(5)
+  cleanupEndTime            String                   @map("cleanup_end_time") @db.VarChar(5)
+  status                    EventStatus              @default(DRAFT)
+  coverImage                String?                  @map("cover_image")
+  customerId                String?                  @map("customer_id")
+  customerName              String                   @map("customer_name")
+  contactNumber             String                   @map("contact_number")
+  emailAddress              String?                  @map("email_address")
+  companyName               String?                  @map("company_name")
+  expectedGuests            Int                      @map("expected_guests")
+  adults                    Int
+  children                  Int                      @default(0)
+  occasion                  String?
+  seatingArrangement        String?                  @map("seating_arrangement")
+  venue                     String
+  venueCapacity             Int?                     @map("venue_capacity")
+  venueRequirements         String?                  @map("venue_requirements") @db.Text
+  foodBeverageRequirements  String?                  @map("food_beverage_requirements") @db.Text
+  decorationRequirements    String?                  @map("decoration_requirements") @db.Text
+  entertainmentRequirements String?                  @map("entertainment_requirements") @db.Text
+  additionalNotes           String?                  @map("additional_notes") @db.Text
+  assignedCoordinatorId     String?                  @map("assigned_coordinator_id")
+  assignedAgentId           String?                  @map("assigned_agent_id")
+  assignedById              String?                  @map("assigned_by")
+  assignedAt                DateTime?                @map("assigned_at")
+  internalNotes             String?                  @map("internal_notes") @db.Text
+  enquiryId                 String?                  @map("enquiry_id")
+  bookingId                 String?                  @map("booking_id")
+  createdById               String                   @map("created_by")
+  deletedAt                 DateTime?                @map("deleted_at")
+  createdAt                 DateTime                 @default(now()) @map("created_at")
+  updatedAt                 DateTime                 @updatedAt @map("updated_at")
+  category                  EventCategory            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  customer                  User?                    @relation("event_customer", fields: [customerId], references: [id], onDelete: SetNull)
+  coordinator               User?                    @relation("event_coordinator", fields: [assignedCoordinatorId], references: [id], onDelete: SetNull)
+  assignedAgent             User?                    @relation("event_assigned_agent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  assignedBy                User?                    @relation("event_assigned_by", fields: [assignedById], references: [id], onDelete: SetNull)
+  createdBy                 User                     @relation("event_created_by", fields: [createdById], references: [id], onDelete: Restrict)
+  enquiry                   Enquiry?                 @relation("event_enquiry", fields: [enquiryId], references: [id], onDelete: SetNull)
+  booking                   Booking?                 @relation("event_booking", fields: [bookingId], references: [id], onDelete: SetNull)
+  statusHistory             EventStatusHistory[]
+  activities                EventActivity[]
+  checklist                 EventChecklistItem[]
+  assignmentHistory         EventAssignmentHistory[]
+
+  @@index([categoryId])
+  @@index([customerId])
+  @@index([assignedCoordinatorId])
+  @@index([assignedAgentId])
+  @@index([assignedById])
+  @@index([createdById])
+  @@index([eventDate, status])
+  @@index([status])
+  @@index([venue, eventDate])
+  @@index([enquiryId])
+  @@index([bookingId])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("events")
+}
+
+model EventStatusHistory {
+  id             String       @id
+  eventId        String       @map("event_id")
+  previousStatus EventStatus? @map("previous_status")
+  newStatus      EventStatus  @map("new_status")
+  remarks        String?      @db.Text
+  changedById    String?      @map("changed_by")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  event          Event        @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  changedBy      User?        @relation("event_status_changed_by", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([eventId, createdAt])
+  @@index([changedById])
+  @@map("event_status_history")
+}
+
+model EventActivity {
+  id           String   @id
+  eventId      String   @map("event_id")
+  activityType String   @map("activity_type")
+  description  String   @db.Text
+  createdById  String?  @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  createdBy    User?    @relation("event_activity_created_by", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([eventId, createdAt])
+  @@index([createdById])
+  @@map("event_activities")
+}
+
+model EventAssignmentHistory {
+  id                    String   @id
+  eventId               String   @map("event_id")
+  previousCoordinatorId String?  @map("previous_coordinator_id")
+  newCoordinatorId      String?  @map("new_coordinator_id")
+  previousAgentId       String?  @map("previous_agent_id")
+  newAgentId            String?  @map("new_agent_id")
+  changedById           String?  @map("changed_by")
+  createdAt             DateTime @default(now()) @map("created_at")
+  event                 Event    @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  previousCoordinator   User?    @relation("event_assignment_previous_coordinator", fields: [previousCoordinatorId], references: [id], onDelete: SetNull)
+  newCoordinator        User?    @relation("event_assignment_new_coordinator", fields: [newCoordinatorId], references: [id], onDelete: SetNull)
+  previousAgent         User?    @relation("event_assignment_previous_agent", fields: [previousAgentId], references: [id], onDelete: SetNull)
+  newAgent              User?    @relation("event_assignment_new_agent", fields: [newAgentId], references: [id], onDelete: SetNull)
+  changedBy             User?    @relation("event_assignment_changed_by", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([eventId, createdAt])
+  @@index([changedById])
+  @@map("event_assignment_history")
+}
+
+model EventChecklistItem {
+  id            String            @id
+  eventId       String            @map("event_id")
+  name          String
+  description   String?           @db.Text
+  assignedToId  String?           @map("assigned_to")
+  dueDate       DateTime?         @map("due_date") @db.Date
+  priority      EventTaskPriority @default(MEDIUM)
+  status        EventTaskStatus   @default(PENDING)
+  completedById String?           @map("completed_by")
+  completedAt   DateTime?         @map("completed_at")
+  createdById   String            @map("created_by")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  event         Event             @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  assignedTo    User?             @relation("event_task_assignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  completedBy   User?             @relation("event_task_completed_by", fields: [completedById], references: [id], onDelete: SetNull)
+  createdBy     User              @relation("event_task_created_by", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([eventId, status])
+  @@index([assignedToId])
+  @@index([dueDate, status])
+  @@index([createdById])
+  @@map("event_checklist_items")
+}
+
+model BookingStatusHistory {
+  id             String         @id
+  bookingId      String         @map("booking_id")
+  previousStatus BookingStatus? @map("previous_status")
+  newStatus      BookingStatus  @map("new_status")
+  updatedById    String?        @map("updated_by")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  booking        Booking        @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  updatedBy      User?          @relation("booking_status_updated_by", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([bookingId, createdAt])
+  @@index([updatedById])
+  @@map("booking_status_history")
+}
+
 model Session {
-  id        String   @id
-  expiresAt DateTime
-  token     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ipAddress String?
-  userAgent String?
+  id             String   @id
+  expiresAt      DateTime
+  token          String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?
+  userAgent      String?
   impersonatedBy String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("session")

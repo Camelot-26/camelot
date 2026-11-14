@@ -44,22 +44,21 @@ the authenticated user's role before showing a workspace.
 
 ### Local database setup
 
-1. In pgAdmin, create the `camelot_db` database owned by `ramankumar` and make
-   sure the PostgreSQL server is running.
+1. In pgAdmin, create the `camelot_db` database owned by your local PostgreSQL
+   user and make sure the PostgreSQL server is running.
 2. Copy the template and edit it locally:
 
    ```bash
    cp .env.example .env
    ```
 
-   Set your PostgreSQL password in `DATABASE_URL`, URL-encoding special
-   characters in the password. Do not commit or share `.env`.
+   Set `DATABASE_URL` to your local PostgreSQL username and password, and
+   URL-encode special characters in the password. Do not commit or share `.env`.
 3. Generate an auth secret with `openssl rand -base64 32` and set
    `BETTER_AUTH_SECRET` in `.env`. Keep `BETTER_AUTH_URL` as
    `http://localhost:3000` for local development. Configure `SMTP_HOST`,
    `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASSWORD` with your email provider's
-   SMTP settings. Set `SMTP_FROM` to a sender address verified by that provider;
-   the configured default is `admin@camelot.com`.
+   SMTP settings. Set `SMTP_FROM` to a sender address verified by that provider.
 4. Apply the database migration:
 
    ```bash
