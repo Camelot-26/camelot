@@ -4,8 +4,8 @@ import {
   AdminPortalFrame,
   AdminThemeProvider,
 } from "@/components/layout/admin-theme";
+import { PortalFrame } from "@/components/layout/portal-frame";
 import { ProtectedPortal } from "@/components/layout/protected-portal";
-import { PortalNavigation } from "@/components/layout/portal-navigation";
 import type { UserRole } from "@/types";
 
 export function PortalLayout({
@@ -34,15 +34,9 @@ export function PortalLayout({
               </AdminPortalFrame>
             </AdminThemeProvider>
           ) : (
-            <div className="portal">
-              <PortalNavigation role={role} title={title} />
-              <main className="portal-main">
-                <div className="portal-preview-notice">
-                  Signed in · {title} access verified
-                </div>
-                {children}
-              </main>
-            </div>
+            <PortalFrame role={role} title={title} user={user}>
+              {children}
+            </PortalFrame>
           )
         }
       </ProtectedPortal>

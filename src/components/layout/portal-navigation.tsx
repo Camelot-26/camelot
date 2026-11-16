@@ -2,12 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { SignOutButton } from "@/components/layout/sign-out-button";
 import type { UserRole } from "@/types";
 
 type NavigationItem = {
   href?: string;
+  icon: AdminNavigationIcon;
   label: string;
 };
 
@@ -84,17 +86,17 @@ function AdminNavigationIconView({ icon }: { icon: AdminNavigationIcon }) {
 
 const navigation: Record<Exclude<UserRole, "admin">, NavigationItem[]> = {
   customer: [
-    { href: "/customer/dashboard", label: "Dashboard" },
-    { href: "/customer/bookings", label: "My Bookings" },
-    { href: "/customer/enquiries", label: "My Enquiries" },
-    { href: "/customer/events", label: "My Events" },
-    { label: "Notifications" },
-    { href: "/customer/profile", label: "My Profile" },
+    { href: "/customer/dashboard", icon: "dashboard", label: "Dashboard" },
+    { href: "/customer/bookings", icon: "booking", label: "My Bookings" },
+    { href: "/customer/enquiries", icon: "mail", label: "My Enquiries" },
+    { href: "/customer/events", icon: "calendar", label: "My Events" },
+    { icon: "bell", label: "Notifications" },
+    { href: "/customer/profile", icon: "user", label: "My Profile" },
   ],
   agent: [
-    { href: "/agent/dashboard", label: "Overview" },
-    { href: "/agent/referrals", label: "Referrals" },
-    { href: "/agent/enquiries", label: "Enquiries" },
+    { href: "/agent/dashboard", icon: "dashboard", label: "Overview" },
+    { href: "/agent/referrals", icon: "referral", label: "Referrals" },
+    { href: "/agent/enquiries", icon: "mail", label: "Enquiries" },
   ],
 };
 
@@ -190,6 +192,7 @@ export function PortalNavigation({
   user?: { name: string; image: string | null };
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const pathname = usePathname();
   const [expandedSection, setExpandedSection] = useState<string | null>(
     "overview",
   );
@@ -212,7 +215,7 @@ export function PortalNavigation({
             C
           </span>
         </Link>
-        {role === "admin" && (
+        {role !== "agent" && (
           <button
             aria-controls="portal-navigation"
             aria-expanded={!isSidebarCollapsed}
@@ -244,7 +247,7 @@ export function PortalNavigation({
           </span>
         </button>
       </div>
-      {role === "admin" && user && (
+      {(role === "admin" || role === "customer") && user && (
         <div
           className="portal-sidebar-profile"
           title={isSidebarCollapsed ? user.name : undefined}
@@ -314,6 +317,12 @@ export function PortalNavigation({
                             aria-label={
                               isSidebarCollapsed ? item.label : undefined
                             }
+                            aria-current={
+                              pathname === item.href ? "page" : undefined
+                            }
+                            className={
+                              pathname === item.href ? "is-active" : undefined
+                            }
                             href={item.href}
                             key={item.label}
                             onClick={() => setMenuOpen(false)}
@@ -353,26 +362,46 @@ export function PortalNavigation({
             : navigation[role].map((item) =>
                 item.href ? (
                   <Link
+                    aria-current={
+                      pathname === item.href ? "page" : undefined
+                    }
+                    aria-label={
+                      isSidebarCollapsed ? item.label : undefined
+                    }
+                    className={
+                      pathname === item.href ? "is-active" : undefined
+                    }
                     href={item.href}
                     key={item.label}
                     onClick={() => setMenuOpen(false)}
+                    title={isSidebarCollapsed ? item.label : undefined}
                   >
-                    {item.label}
+                    <AdminNavigationIconView icon={item.icon} />
+                    <span className="portal-nav-item-label">{item.label}</span>
                   </Link>
                 ) : (
                   <span
                     aria-disabled="true"
+                    aria-label={
+                      isSidebarCollapsed
+                        ? `${item.label}, coming soon`
+                        : undefined
+                    }
                     className="portal-nav-disabled"
                     key={item.label}
+                    title={isSidebarCollapsed ? item.label : undefined}
                   >
-                    <span className="portal-nav-disabled-label">{item.label}</span>
+                    <span className="portal-nav-disabled-label">
+                      <AdminNavigationIconView icon={item.icon} />
+                      <span className="portal-nav-item-label">{item.label}</span>
+                    </span>
                     <small>Coming soon</small>
                   </span>
                 ),
               )}
         </nav>
         <SignOutButton
-          collapsed={role === "admin" && isSidebarCollapsed}
+          collapsed={isSidebarCollapsed}
         />
         <Link
             aria-label="Back to Camelot"

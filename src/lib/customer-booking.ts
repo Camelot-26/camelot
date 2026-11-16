@@ -23,6 +23,7 @@ export async function getCustomerBookingUser() {
       name: true,
       email: true,
       phone: true,
+      image: true,
     },
   });
 }
