@@ -35,6 +35,22 @@ const adminSections = [
     status: "In development",
     available: false,
   },
+  {
+    href: "/admin/restaurant/categories",
+    number: "05",
+    title: "Menu categories",
+    description: "Organize menu items into restaurant categories.",
+    status: "Live",
+    available: true,
+  },
+  {
+    href: "/admin/restaurant/menus",
+    number: "06",
+    title: "Restaurant menus",
+    description: "Manage menu items, prices, and availability.",
+    status: "Live",
+    available: true,
+  },
 ];
 
 function initials(name: string) {

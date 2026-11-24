@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  createManagedUser,
   issueTemporaryPassword,
   updateAdminUser,
 } from "@/app/(admin)/admin/users/actions";
@@ -32,10 +33,16 @@ type TemporaryPassword =
       message: string;
     };
 
-export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
+export function AdminUserDirectory({
+  initialRole,
+  users,
+}: {
+  initialRole: string;
+  users: AdminUser[];
+}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [role, setRole] = useState("all");
+  const [role, setRole] = useState(initialRole);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [viewingUser, setViewingUser] = useState<AdminUser | null>(null);
@@ -55,6 +62,10 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
     null,
   );
   const [passwordError, setPasswordError] = useState("");
+  const [addingAdminUser, setAddingAdminUser] = useState(false);
+  const [adminUserSaving, setAdminUserSaving] = useState(false);
+  const [adminUserError, setAdminUserError] = useState("");
+  const [adminUserNotice, setAdminUserNotice] = useState("");
   const imageUrlInputRef = useRef<HTMLInputElement>(null);
   const imageFileInputRef = useRef<HTMLInputElement>(null);
   const imageReaderRef = useRef<FileReader | null>(null);
@@ -109,6 +120,52 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
       setEditError("We couldn’t save those changes. Please try again.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function submitAdminUser(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const role =
+      initialRole === "agent"
+        ? "agent"
+        : initialRole === "customer"
+          ? "customer"
+          : "admin";
+    const accountLabel =
+      role === "admin" ? "administrator" : role === "agent" ? "agent" : "customer";
+    setAdminUserSaving(true);
+    setAdminUserError("");
+    setAdminUserNotice("");
+
+    try {
+      const result = await createManagedUser({
+        name: String(formData.get("name") ?? ""),
+        email: String(formData.get("email") ?? ""),
+        phone: String(formData.get("phone") ?? ""),
+        role,
+      });
+      if (!result.success) {
+        if (result.userCreated) {
+          setAddingAdminUser(false);
+          setAdminUserNotice(result.message);
+          router.refresh();
+        } else {
+          setAdminUserError(result.message);
+        }
+        return;
+      }
+
+      setAddingAdminUser(false);
+      setAdminUserNotice(
+        `${accountLabel[0].toUpperCase()}${accountLabel.slice(1)} created. A temporary password was emailed and must be changed at first sign-in.`,
+      );
+      router.refresh();
+    } catch (actionError) {
+      console.error(`Could not create an ${accountLabel} account.`, actionError);
+      setAdminUserError(`The ${accountLabel} could not be created. Please try again.`);
+    } finally {
+      setAdminUserSaving(false);
     }
   }
 
@@ -255,25 +312,58 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
             value={query}
           />
         </label>
-        <label className="admin-directory-filter">
-          <span className="sr-only">Filter by account type</span>
-          <select
-            onChange={(event) => {
-              setRole(event.target.value);
-              setPage(1);
-            }}
-            value={role}
-          >
-            <option value="all">All account types</option>
-            <option value="customer">Customers</option>
-            <option value="agent">Agents</option>
-            <option value="admin">Administrators</option>
-          </select>
-        </label>
+        {initialRole === "all" && (
+          <label className="admin-directory-filter">
+            <span className="sr-only">Filter by account type</span>
+            <select
+              onChange={(event) => {
+                setRole(event.target.value);
+                setPage(1);
+              }}
+              value={role}
+            >
+              <option value="all">All account types</option>
+              <option value="customer">Customers</option>
+              <option value="agent">Agents</option>
+              <option value="admin">Administrators</option>
+            </select>
+          </label>
+        )}
         <span className="admin-directory-count">
           {filteredUsers.length} {filteredUsers.length === 1 ? "account" : "accounts"}
         </span>
+        {(initialRole === "admin" ||
+          initialRole === "agent" ||
+          initialRole === "customer") && (
+          <button
+            className="button button-dark"
+            onClick={() => {
+              setAdminUserError("");
+              setAddingAdminUser(true);
+            }}
+            type="button"
+          >
+            {initialRole === "agent"
+              ? "Add Agent"
+              : initialRole === "customer"
+                ? "Add Customer"
+                : "Add Admin User"}{" "}
+            <span aria-hidden="true">＋</span>
+          </button>
+        )}
       </div>
+      {adminUserNotice && (
+        <p aria-live="polite" className="admin-event-notice">
+          {adminUserNotice}
+          <button
+            aria-label="Dismiss"
+            onClick={() => setAdminUserNotice("")}
+            type="button"
+          >
+            ×
+          </button>
+        </p>
+      )}
       {filteredUsers.length > 0 ? (
         <div className="admin-directory-table-wrap">
           <table className="admin-directory-table">
@@ -364,7 +454,13 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
           <p>
             {users.length
               ? "Try a different search or account type."
-              : "New customer and team accounts will appear here."}
+              : initialRole === "admin"
+                ? "Add an administrator account to get started."
+                : initialRole === "agent"
+                  ? "Add an agent account to get started."
+                  : initialRole === "customer"
+                    ? "Add a customer account to get started."
+                  : "New customer and team accounts will appear here."}
           </p>
         </div>
       )}
@@ -413,6 +509,123 @@ export function AdminUserDirectory({ users }: { users: AdminUser[] }) {
         <p className="admin-directory-limit">
           Showing the 100 most recently created accounts.
         </p>
+      )}
+
+      {addingAdminUser && (
+        <div
+          className="admin-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !adminUserSaving) {
+              setAddingAdminUser(false);
+            }
+          }}
+        >
+          <section
+            aria-labelledby="admin-create-title"
+            aria-modal="true"
+            className="admin-modal"
+            role="dialog"
+          >
+            <div className="admin-modal-heading">
+              <div>
+                <p className="eyebrow">
+                  {initialRole === "agent"
+                    ? "Agent access"
+                    : initialRole === "customer"
+                      ? "Customer access"
+                      : "Back-office access"}
+                </p>
+                <h2 id="admin-create-title">
+                  {initialRole === "agent"
+                    ? "Add Agent"
+                    : initialRole === "customer"
+                      ? "Add Customer"
+                      : "Add Admin User"}
+                </h2>
+              </div>
+              <button
+                aria-label={
+                  initialRole === "agent"
+                    ? "Close agent form"
+                    : initialRole === "customer"
+                      ? "Close customer form"
+                      : "Close admin user form"
+                }
+                className="admin-modal-close"
+                disabled={adminUserSaving}
+                onClick={() => setAddingAdminUser(false)}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+            <form className="admin-user-edit-form" onSubmit={submitAdminUser}>
+              <label>
+                Full name
+                <input
+                  autoComplete="name"
+                  maxLength={100}
+                  name="name"
+                  required
+                />
+              </label>
+              <label>
+                Email address
+                <input
+                  autoComplete="email"
+                  maxLength={254}
+                  name="email"
+                  required
+                  type="email"
+                />
+              </label>
+              <label>
+                Phone number
+                <input
+                  autoComplete="tel"
+                  maxLength={40}
+                  name="phone"
+                  type="tel"
+                />
+              </label>
+              <p className="admin-password-hint">
+                {initialRole === "agent"
+                  ? "A temporary password will be emailed. The agent must change it when they first sign in."
+                  : initialRole === "customer"
+                    ? "A temporary password will be emailed. The customer must change it when they first sign in."
+                    : "A temporary password will be emailed. The administrator must change it when they first sign in."}
+              </p>
+              {adminUserError && (
+                <p className="admin-directory-error" role="alert">
+                  {adminUserError}
+                </p>
+              )}
+              <div className="admin-modal-actions">
+                <button
+                  className="admin-modal-cancel"
+                  disabled={adminUserSaving}
+                  onClick={() => setAddingAdminUser(false)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="button button-dark"
+                  disabled={adminUserSaving}
+                  type="submit"
+                >
+                  {adminUserSaving
+                    ? "Creating…"
+                    : initialRole === "agent"
+                      ? "Create Agent"
+                      : initialRole === "customer"
+                        ? "Create Customer"
+                        : "Create Admin User"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
       )}
 
       {viewingUser && (

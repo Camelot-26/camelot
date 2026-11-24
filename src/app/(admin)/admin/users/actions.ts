@@ -34,10 +34,18 @@ type PasswordResult =
       sessionsRevoked?: boolean;
     };
 
+type CreateManagedUserResult =
+    | { success: true }
+    | { success: false; message: string; userCreated?: boolean };
+
 const userRoles: UserRole[] = ["admin", "agent", "customer"];
 
 function isUserRole(role: string): role is UserRole {
   return userRoles.includes(role as UserRole);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function isUniqueConstraintError(
@@ -233,6 +241,145 @@ export async function updateAdminUser(
     }
   }
 
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/dashboard");
+  return { success: true };
+}
+
+export async function createManagedUser(
+  value: unknown,
+): Promise<CreateManagedUserResult> {
+  await requireUserRole("admin");
+  const requestHeaders = await headers();
+  const session = await getAuth().api.getSession({ headers: requestHeaders });
+  if (!session) {
+    return { success: false, message: "Your session expired. Sign in again." };
+  }
+  if (
+    !isRecord(value) ||
+    typeof value.name !== "string" ||
+    typeof value.email !== "string" ||
+    typeof value.phone !== "string" ||
+    typeof value.role !== "string"
+  ) {
+    return { success: false, message: "Enter the required account details." };
+  }
+
+  const name = value.name.trim();
+  const email = value.email.trim().toLowerCase();
+  const phone = value.phone.trim();
+  const role = value.role;
+  if (role !== "admin" && role !== "agent" && role !== "customer") {
+    return { success: false, message: "Select a valid account type." };
+  }
+  const roleLabel =
+    role === "admin" ? "administrator" : role === "agent" ? "agent" : "customer";
+  const roleWithArticle =
+    role === "admin" ? "an administrator" : `a ${roleLabel}`;
+  if (!name || name.length > 100) {
+    return { success: false, message: "Enter a name between 1 and 100 characters." };
+  }
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { success: false, message: "Enter a valid email address." };
+  }
+  if (phone.length > 40) {
+    return { success: false, message: "Phone number must be 40 characters or less." };
+  }
+
+  const prisma = getPrisma();
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+  if (existingUser) {
+    return {
+      success: false,
+      message: "That email address is already associated with an account.",
+    };
+  }
+
+  let transport: ReturnType<typeof createSmtpTransport>;
+  try {
+    transport = createSmtpTransport();
+    await transport.verify();
+  } catch (error) {
+    console.error("Could not verify the SMTP email configuration.", error);
+    return {
+      success: false,
+      message:
+        `Email delivery is unavailable. Check the SMTP settings before creating ${roleWithArticle}.`,
+    };
+  }
+
+  const temporaryPassword = randomBytes(18).toString("base64url");
+  let userId: string;
+  try {
+    const result = await getAuth().api.createUser({
+      body: {
+        email,
+        password: temporaryPassword,
+        name,
+        role: role === "admin" ? "admin" : "user",
+        data: {
+          phone: phone || null,
+          passwordChangeRequired: true,
+        },
+      },
+      headers: requestHeaders,
+    });
+    userId = result.user.id;
+  } catch (error) {
+    console.error(`Could not create a ${roleLabel} account.`, error);
+    return {
+      success: false,
+      message:
+        `The ${roleLabel} account could not be created. Confirm the email address is unused and try again.`,
+    };
+  }
+
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        role,
+        phone: phone || null,
+        passwordChangeRequired: true,
+      },
+    });
+  } catch (error) {
+    console.error(`The new account could not be prepared as an ${roleLabel}.`, error);
+    return {
+      success: false,
+      message:
+        `The account was created but could not be prepared as ${roleWithArticle}. Contact support.`,
+      userCreated: true,
+    };
+  }
+
+  try {
+    await sendTemporaryPasswordEmail(transport, {
+      name,
+      email,
+      password: temporaryPassword,
+    });
+  } catch (error) {
+    console.error(`The ${roleLabel} account was created, but its email could not be sent.`, error);
+    revalidatePath("/admin/customers");
+    revalidatePath("/admin/agents");
+    revalidatePath("/admin/admin-users");
+    revalidatePath("/admin/users");
+    revalidatePath("/admin/dashboard");
+    return {
+      success: false,
+      message:
+        `The ${roleLabel} account was created, but the temporary password email could not be sent. Use Reset password on the account to try again.`,
+      userCreated: true,
+    };
+  }
+
+  revalidatePath("/admin/customers");
+  revalidatePath("/admin/agents");
+  revalidatePath("/admin/admin-users");
   revalidatePath("/admin/users");
   revalidatePath("/admin/dashboard");
   return { success: true };

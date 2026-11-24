@@ -9,7 +9,7 @@ const globalForPrisma = globalThis as typeof globalThis & {
 };
 
 // Bump this when regenerating Prisma after a schema change; the dev global survives HMR.
-const prismaSchemaVersion = "customer-event-request-metadata-v1";
+const prismaSchemaVersion = "restaurant-menu-categories-v1";
 
 export function getPrisma() {
   const currentPrisma = globalForPrisma.prisma;
@@ -18,7 +18,9 @@ export function getPrisma() {
     currentPrisma?.booking &&
     currentPrisma.event &&
     currentPrisma.eventCategory &&
-    currentPrisma.bookingCancellationRequest
+    currentPrisma.bookingCancellationRequest &&
+    currentPrisma.menuCategory &&
+    currentPrisma.menuItem
   ) {
     return currentPrisma;
   }

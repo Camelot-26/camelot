@@ -123,8 +123,8 @@ const adminNavigation: AdminNavigationSection[] = [
     icon: "users",
     label: "Users",
     items: [
-      { href: "/admin/users", icon: "user", label: "Users" },
-      // { label: "Agents" },
+      { href: "/admin/customers", icon: "user", label: "Customer" },
+      { href: "/admin/agents", icon: "users", label: "Agents" },
       // { label: "Referrals" },
     ],
   },
@@ -133,8 +133,8 @@ const adminNavigation: AdminNavigationSection[] = [
     icon: "restaurant",
     label: "Restaurant",
     items: [
-      { icon: "restaurant", label: "Menus" },
-      { icon: "category", label: "Categories" },
+      { href: "/admin/restaurant/categories", icon: "category", label: "Menu Categories" },
+      { href: "/admin/restaurant/menus", icon: "restaurant", label: "Menus" },
       { icon: "performance", label: "Performances" },
     ],
   },
@@ -153,7 +153,7 @@ const adminNavigation: AdminNavigationSection[] = [
     icon: "shield",
     label: "Management",
     items: [
-      { href: "/admin/users", icon: "users", label: "Users" },
+      { href: "/admin/admin-users", icon: "users", label: "Back-office User" },
       { icon: "shield", label: "Roles" },
       { icon: "key", label: "Permissions" },
     ],
@@ -194,7 +194,10 @@ export function PortalNavigation({
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
   const [expandedSection, setExpandedSection] = useState<string | null>(
-    "overview",
+    () =>
+      adminNavigation.find((section) =>
+        section.items.some((item) => item.href === pathname),
+      )?.id ?? "overview",
   );
 
   return (

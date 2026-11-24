@@ -53,7 +53,8 @@ export async function sendTemporaryPasswordEmail(
     text: [
       `Hello ${name},`,
       "",
-      "An administrator issued a temporary password for your Camelot account.",
+      "Use these credentials to sign in to your Camelot account:",
+      `Email address: ${email}`,
       "",
       `Temporary password: ${password}`,
       "",
