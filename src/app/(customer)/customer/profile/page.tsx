@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { CustomerProfileForm } from "@/components/customer/customer-profile-form";
+import { AccountProfileForm } from "@/components/account/account-profile-form";
 import { getCustomerBookingUser } from "@/lib/customer-booking";
 
 export default function CustomerProfilePage() {
@@ -23,7 +23,7 @@ async function CustomerProfileContent() {
 
   return (
     <div className="customer-profile-page">
-      <CustomerProfileForm
+      <AccountProfileForm
         email={customer.email}
         image={customer.image}
         name={customer.name}

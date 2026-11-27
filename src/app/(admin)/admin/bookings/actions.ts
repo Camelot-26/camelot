@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { Prisma } from "@/generated/prisma/client";
 import { getAuth } from "@/lib/auth";
-import { requireUserRole } from "@/lib/authorization";
+import { requireAdminPermission } from "@/lib/authorization";
 import { createBookingWithHistory } from "@/lib/booking-creation";
 import {
   bookingStatuses,
@@ -97,7 +97,7 @@ function parseBookingInput(
 }
 
 async function getAdminActorId() {
-  await requireUserRole("admin");
+  await requireAdminPermission("bookings.manage");
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) {
     return null;

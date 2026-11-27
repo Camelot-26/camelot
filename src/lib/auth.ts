@@ -36,6 +36,11 @@ function createAuth() {
           type: "string",
           required: false,
         },
+        adminRoleId: {
+          type: "string",
+          required: false,
+          input: false,
+        },
         role: {
           type: "string",
           required: true,

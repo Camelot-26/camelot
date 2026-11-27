@@ -1,6 +1,9 @@
 import { Suspense } from "react";
 import { AdminMenuManagement } from "@/components/admin/admin-menu-management";
+import { AdminPermissionBoundary } from "@/components/admin/admin-permission-boundary";
 import { getPrisma } from "@/lib/prisma";
+
+export const instant = false;
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -19,9 +22,11 @@ export default function AdminRestaurantMenusPage({
   searchParams: SearchParams;
 }) {
   return (
-    <Suspense fallback={<MenuItemsLoading />}>
-      <MenuItemsContent searchParams={searchParams} />
-    </Suspense>
+    <AdminPermissionBoundary permission="restaurant.view">
+      <Suspense fallback={<MenuItemsLoading />}>
+        <MenuItemsContent searchParams={searchParams} />
+      </Suspense>
+    </AdminPermissionBoundary>
   );
 }
 

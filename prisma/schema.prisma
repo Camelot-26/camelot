@@ -15,6 +15,7 @@ model User {
   image                       String?
   phone                       String?
   role                        String                       @default("customer")
+  adminRoleId                 String?
   banned                      Boolean                      @default(false)
   banReason                   String?
   banExpires                  DateTime?
@@ -23,6 +24,7 @@ model User {
   updatedAt                   DateTime                     @updatedAt
   sessions                    Session[]
   accounts                    Account[]
+  adminRole                   AdminRole?                   @relation(fields: [adminRoleId], references: [id], onDelete: Restrict)
   bookingsAsCustomer          Booking[]                    @relation("booking_customer")
   bookingsAssigned            Booking[]                    @relation("booking_assigned_agent")
   bookingsCreated             Booking[]                    @relation("booking_created_by")
@@ -52,6 +54,18 @@ model User {
   eventNewAgents              EventAssignmentHistory[]     @relation("event_assignment_new_agent")
 
   @@map("user")
+}
+
+model AdminRole {
+  id          String   @id
+  name        String   @unique
+  description String?
+  permissions String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+
+  @@map("admin_role")
 }
 
 enum BookingStatus {

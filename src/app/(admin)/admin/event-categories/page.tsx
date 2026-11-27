@@ -1,12 +1,17 @@
 import { Suspense } from "react";
 import { AdminEventCategories } from "@/components/admin/admin-event-categories";
+import { AdminPermissionBoundary } from "@/components/admin/admin-permission-boundary";
 import { getPrisma } from "@/lib/prisma";
 
-export default async function AdminEventCategoriesPage() {
+export const instant = false;
+
+export default function AdminEventCategoriesPage() {
   return (
-    <Suspense fallback={<EventCategoriesLoading />}>
-      <EventCategoriesContent />
-    </Suspense>
+    <AdminPermissionBoundary permission="events.view">
+      <Suspense fallback={<EventCategoriesLoading />}>
+        <EventCategoriesContent />
+      </Suspense>
+    </AdminPermissionBoundary>
   );
 }
 

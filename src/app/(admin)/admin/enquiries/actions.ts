@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 import { BookingStatus, EnquiryFollowupStatus, EnquiryStatus, Prisma } from "@/generated/prisma/client";
 import { getBookingTypeForEnquiry, createBookingWithHistory } from "@/lib/booking-creation";
 import { getAuth } from "@/lib/auth";
-import { requireUserRole } from "@/lib/authorization";
+import { requireAdminPermission } from "@/lib/authorization";
 import {
   enquiryPriorities,
   enquirySources,
@@ -43,7 +43,7 @@ function isRequestError(error: unknown, code: string) {
 }
 
 async function getAdminActorId() {
-  await requireUserRole("admin");
+  await requireAdminPermission("enquiries.manage");
   const session = await getAuth().api.getSession({ headers: await headers() });
   return session?.user.id ?? null;
 }

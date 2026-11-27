@@ -104,7 +104,13 @@ export function AdminPortalFrame({
 }: {
   children: ReactNode;
   title: string;
-  user: { name: string; image: string | null };
+  user: {
+    name: string;
+    image: string | null;
+    adminPermissions: string[];
+    isSuperAdmin: boolean;
+    adminRoleId: string | null;
+  };
 }) {
   const { theme } = useAdminTheme();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -120,6 +126,8 @@ export function AdminPortalFrame({
         role="admin"
         title={title}
         user={user}
+        adminPermissions={user.adminPermissions}
+        isSuperAdmin={user.isSuperAdmin}
       />
       <main className="portal-main">
         <div className="portal-preview-notice">

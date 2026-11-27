@@ -5,21 +5,25 @@ import { APIError } from "better-auth";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { getAuth } from "@/lib/auth";
-import { requireUserRole } from "@/lib/authorization";
-import { getCustomerBookingUser } from "@/lib/customer-booking";
 import { getPrisma } from "@/lib/prisma";
 import { getUserImageStorage } from "@/lib/user-image-storage";
 import { parseUploadedProfileImage } from "@/lib/user-profile-image";
 
-type CustomerProfileResult =
+type AccountProfileResult =
   | { success: true }
   | { success: false; message: string };
 
-export async function updateCustomerProfile(
+type ProfileRole = "customer" | "agent";
+
+export async function updateAccountProfile(
   changes: unknown,
-): Promise<CustomerProfileResult> {
-  const customer = await getCustomerBookingUser();
-  if (!customer) {
+  role: ProfileRole,
+): Promise<AccountProfileResult> {
+  if (role !== "customer" && role !== "agent") {
+    return { success: false, message: "This profile cannot be updated." };
+  }
+  const session = await getAuth().api.getSession({ headers: await headers() });
+  if (!session || session.user.role !== role) {
     return { success: false, message: "Your session expired. Sign in again." };
   }
   if (
@@ -74,7 +78,7 @@ export async function updateCustomerProfile(
       try {
         await getUserImageStorage().save(uploadedImageKey, uploadedImage.bytes);
       } catch (error) {
-        console.error("Could not save the uploaded customer profile image.", error);
+        console.error("Could not save the uploaded profile image.", error);
         return {
           success: false,
           message: "We couldn’t save the uploaded image. Please try again.",
@@ -88,15 +92,15 @@ export async function updateCustomerProfile(
   let profileUpdated = false;
   try {
     await getPrisma().$transaction(async (transaction) => {
-      const currentCustomer = await transaction.user.findFirst({
-        where: { id: customer.id, role: "customer", banned: false },
+      const currentUser = await transaction.user.findFirst({
+        where: { id: session.user.id, role, banned: false },
         select: { image: true },
       });
-      if (!currentCustomer) return;
+      if (!currentUser) return;
 
-      previousImage = currentCustomer.image;
+      previousImage = currentUser.image;
       const result = await transaction.user.updateMany({
-        where: { id: customer.id, role: "customer", banned: false },
+        where: { id: session.user.id, role, banned: false },
         data: {
           name,
           phone: phone || null,
@@ -132,7 +136,7 @@ export async function updateCustomerProfile(
     }
     return {
       success: false,
-      message: "Your customer profile is no longer available.",
+      message: "Your profile is no longer available.",
     };
   }
 
@@ -149,20 +153,29 @@ export async function updateCustomerProfile(
     try {
       await getUserImageStorage().delete(previousUpload[1]);
     } catch (error) {
-      console.error("Could not remove the replaced customer profile image.", error);
+      console.error("Could not remove the replaced profile image.", error);
     }
   }
 
-  revalidatePath("/customer/profile");
-  revalidatePath("/customer/dashboard");
+  revalidatePath(`/${role}/profile`);
+  revalidatePath(`/${role}/dashboard`);
   return { success: true };
 }
 
-export async function changeCustomerPassword(
+export async function changeAccountPassword(
   currentPassword: unknown,
   newPassword: unknown,
-): Promise<CustomerProfileResult> {
-  await requireUserRole("customer");
+  role: ProfileRole,
+): Promise<AccountProfileResult> {
+  if (role !== "customer" && role !== "agent") {
+    return { success: false, message: "This password cannot be changed here." };
+  }
+  const requestHeaders = await headers();
+  const auth = getAuth();
+  const session = await auth.api.getSession({ headers: requestHeaders });
+  if (!session || session.user.role !== role) {
+    return { success: false, message: "Your session expired. Sign in again." };
+  }
   if (
     typeof currentPassword !== "string" ||
     !currentPassword ||
@@ -174,13 +187,6 @@ export async function changeCustomerPassword(
       success: false,
       message: "Enter your current password and choose a new password between 8 and 128 characters.",
     };
-  }
-
-  const requestHeaders = await headers();
-  const auth = getAuth();
-  const session = await auth.api.getSession({ headers: requestHeaders });
-  if (!session || session.user.role !== "customer") {
-    return { success: false, message: "Your session expired. Sign in again." };
   }
 
   try {
@@ -202,6 +208,6 @@ export async function changeCustomerPassword(
     throw error;
   }
 
-  revalidatePath("/customer/profile");
+  revalidatePath(`/${role}/profile`);
   return { success: true };
 }

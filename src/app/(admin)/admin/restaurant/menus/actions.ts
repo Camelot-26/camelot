@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@/generated/prisma/client";
-import { requireUserRole } from "@/lib/authorization";
+import { requireAdminPermission } from "@/lib/authorization";
 import { getPrisma } from "@/lib/prisma";
 
 type MenuItemInput = {
@@ -63,7 +63,7 @@ function parseMenuItem(value: unknown): MenuItemInput | string {
 }
 
 export async function saveMenuItem(value: unknown): Promise<ActionResult> {
-  await requireUserRole("admin");
+  await requireAdminPermission("restaurant.manage");
   const parsed = parseMenuItem(value);
   if (typeof parsed === "string") {
     return { success: false, message: parsed };
@@ -130,7 +130,7 @@ export async function saveMenuItem(value: unknown): Promise<ActionResult> {
 }
 
 export async function deleteMenuItem(value: unknown): Promise<ActionResult> {
-  await requireUserRole("admin");
+  await requireAdminPermission("restaurant.manage");
   if (
     !isRecord(value) ||
     typeof value.id !== "string" ||

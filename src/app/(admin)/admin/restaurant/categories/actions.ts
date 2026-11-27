@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@/generated/prisma/client";
-import { requireUserRole } from "@/lib/authorization";
+import { requireAdminPermission } from "@/lib/authorization";
 import { getPrisma } from "@/lib/prisma";
 
 type ActionResult = { success: true } | { success: false; message: string };
@@ -13,7 +13,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export async function saveMenuCategory(value: unknown): Promise<ActionResult> {
-  await requireUserRole("admin");
+  await requireAdminPermission("restaurant.manage");
   if (
     !isRecord(value) ||
     typeof value.name !== "string" ||
@@ -78,7 +78,7 @@ export async function saveMenuCategory(value: unknown): Promise<ActionResult> {
 }
 
 export async function deleteMenuCategory(value: unknown): Promise<ActionResult> {
-  await requireUserRole("admin");
+  await requireAdminPermission("restaurant.manage");
   if (
     !isRecord(value) ||
     typeof value.id !== "string" ||

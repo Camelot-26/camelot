@@ -4,20 +4,23 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import {
-  changeCustomerPassword,
-  updateCustomerProfile,
+  changeAccountPassword,
+  updateAccountProfile,
 } from "@/app/(customer)/customer/profile/actions";
+import type { UserRole } from "@/types";
 
-export function CustomerProfileForm({
+export function AccountProfileForm({
   email,
   image,
   name,
   phone,
+  role = "customer",
 }: {
   email: string;
   image: string | null;
   name: string;
   phone: string | null;
+  role?: Extract<UserRole, "customer" | "agent">;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -42,11 +45,11 @@ export function CustomerProfileForm({
 
     const formData = new FormData(event.currentTarget);
     try {
-      const result = await updateCustomerProfile({
+      const result = await updateAccountProfile({
         name: formData.get("name"),
         phone: formData.get("phone"),
         ...(imageChanged ? { image: uploadedProfileImage } : {}),
-      });
+      }, role);
       if (!result.success) {
         setError(result.message);
         return;
@@ -141,9 +144,10 @@ export function CustomerProfileForm({
     }
 
     try {
-      const result = await changeCustomerPassword(
+      const result = await changeAccountPassword(
         currentPassword,
         newPassword,
+        role,
       );
       if (!result.success) {
         setPasswordError(result.message);
@@ -180,14 +184,14 @@ export function CustomerProfileForm({
               />
             ) : (
               <span aria-hidden="true">
-                {name.trim().slice(0, 1).toUpperCase() || "C"}
+                {name.trim().slice(0, 1).toUpperCase() || (role === "agent" ? "A" : "C")}
               </span>
             )}
           </span>
           <div>
-            <p className="eyebrow">Account details</p>
+            <p className="eyebrow">{role === "agent" ? "Agent account" : "Account details"}</p>
             <h1 id="customer-profile-title">Your profile</h1>
-            <p>Keep your contact details current for a seamless visit.</p>
+            <p>{role === "agent" ? "Keep your contact details up to date." : "Keep your contact details current for a seamless visit."}</p>
           </div>
         </div>
 
@@ -341,3 +345,4 @@ export function CustomerProfileForm({
     </>
   );
 }
+

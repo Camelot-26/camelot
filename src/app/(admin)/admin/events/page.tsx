@@ -2,6 +2,9 @@ import { connection } from "next/server";
 import { AdminEventManagement } from "@/components/admin/admin-event-management";
 import { eventStatuses } from "@/lib/event-constants";
 import { getPrisma } from "@/lib/prisma";
+import { AdminPermissionBoundary } from "@/components/admin/admin-permission-boundary";
+
+export const instant = false;
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -30,7 +33,19 @@ function parseMonth(value: string | undefined, fallback: Date) {
   return new Date(Date.UTC(fallback.getUTCFullYear(), fallback.getUTCMonth(), 1));
 }
 
-export default async function AdminEventsPage({
+export default function AdminEventsPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  return (
+    <AdminPermissionBoundary permission="events.view">
+      <AdminEventsContent searchParams={searchParams} />
+    </AdminPermissionBoundary>
+  );
+}
+
+async function AdminEventsContent({
   searchParams,
 }: {
   searchParams: SearchParams;

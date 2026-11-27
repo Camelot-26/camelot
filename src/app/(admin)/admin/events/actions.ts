@@ -13,7 +13,7 @@ import {
   parseCustomerEventRequest,
 } from "@/lib/customer-event-requests";
 import { getAuth } from "@/lib/auth";
-import { requireUserRole } from "@/lib/authorization";
+import { requireAdminPermission } from "@/lib/authorization";
 import {
   eventStatuses,
   eventTaskPriorities,
@@ -62,7 +62,7 @@ function isRequestError(error: unknown, code: string) {
 }
 
 async function getAdminActorId() {
-  await requireUserRole("admin");
+  await requireAdminPermission("events.manage");
   const session = await getAuth().api.getSession({ headers: await headers() });
   return session?.user.id ?? null;
 }

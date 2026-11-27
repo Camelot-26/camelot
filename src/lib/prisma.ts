@@ -11,6 +11,21 @@ const globalForPrisma = globalThis as typeof globalThis & {
 // Bump this when regenerating Prisma after a schema change; the dev global survives HMR.
 const prismaSchemaVersion = "restaurant-menu-categories-v1";
 
+function normalizePostgresSslMode(connectionString: string) {
+  const url = new URL(connectionString);
+  const sslMode = url.searchParams.get("sslmode")?.toLowerCase();
+
+  if (
+    sslMode === "prefer" ||
+    sslMode === "require" ||
+    sslMode === "verify-ca"
+  ) {
+    url.searchParams.set("sslmode", "verify-full");
+  }
+
+  return url.toString();
+}
+
 export function getPrisma() {
   const currentPrisma = globalForPrisma.prisma;
   if (
@@ -43,7 +58,9 @@ export function getPrisma() {
     );
   }
 
-  const adapter = new PrismaPg({ connectionString });
+  const adapter = new PrismaPg({
+    connectionString: normalizePostgresSslMode(connectionString),
+  });
   globalForPrisma.prisma = new PrismaClient({ adapter });
   globalForPrisma.prismaSchemaVersion = prismaSchemaVersion;
   return globalForPrisma.prisma;

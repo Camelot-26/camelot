@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { getPrisma } from "@/lib/prisma";
+import { requireAdminPermission } from "@/lib/authorization";
+import { getAdminPermissionForPath, hasAdminPermission } from "@/lib/admin-permissions";
+
+export const instant = false;
 
 const adminSections = [
   {
@@ -62,14 +67,23 @@ function initials(name: string) {
     .join("");
 }
 
-async function AdminDashboardData() {
+async function AdminDashboardData({
+  adminPermissions,
+  canViewUsers,
+  isSuperAdmin,
+}: {
+  adminPermissions: string[];
+  canViewUsers: boolean;
+  isSuperAdmin: boolean;
+}) {
   const prisma = getPrisma();
   const [totalUsers, customers, agents, admins, recentUsers] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { role: "customer" } }),
     prisma.user.count({ where: { role: "agent" } }),
     prisma.user.count({ where: { role: "admin" } }),
-    prisma.user.findMany({
+    canViewUsers
+      ? prisma.user.findMany({
       orderBy: { createdAt: "desc" },
       take: 5,
       select: {
@@ -79,7 +93,8 @@ async function AdminDashboardData() {
         role: true,
         createdAt: true,
       },
-    }),
+        })
+      : Promise.resolve([]),
   ]);
 
   const metrics = [
@@ -97,9 +112,11 @@ async function AdminDashboardData() {
           <h1>Administrator Dashboard</h1>
           <p>Here’s what’s happening across your Camelot workspace.</p>
         </div>
-        <Link className="button button-dark admin-dashboard-primary" href="/admin/users">
-          Browse user directory <span aria-hidden="true">→</span>
-        </Link>
+        {canViewUsers && (
+          <Link className="button button-dark admin-dashboard-primary" href="/admin/users">
+            Browse user directory <span aria-hidden="true">→</span>
+          </Link>
+        )}
       </section>
 
       <section className="admin-metrics" aria-label="Account overview">
@@ -116,7 +133,7 @@ async function AdminDashboardData() {
       </section>
 
       <div className="admin-dashboard-grid">
-        <section className="admin-dashboard-panel admin-accounts-panel">
+        {canViewUsers && <section className="admin-dashboard-panel admin-accounts-panel">
           <div className="admin-panel-heading">
             <div>
               <p className="eyebrow">Recently joined</p>
@@ -155,7 +172,7 @@ async function AdminDashboardData() {
               <p>New customer and team accounts will appear here.</p>
             </div>
           )}
-        </section>
+        </section>}
 
         <aside className="admin-dashboard-panel admin-tools-panel">
           <div className="admin-panel-heading">
@@ -165,7 +182,15 @@ async function AdminDashboardData() {
             </div>
           </div>
           <div className="admin-tools-list">
-            {adminSections.map((section) => (
+            {adminSections
+              .filter((section) => {
+                const permission = getAdminPermissionForPath(section.href);
+                return (
+                  !permission ||
+                  hasAdminPermission(adminPermissions, permission, isSuperAdmin)
+                );
+              })
+              .map((section) => (
               <Link
                 className={`admin-tool${section.available ? "" : " admin-tool-pending"}`}
                 href={section.href}
@@ -205,8 +230,25 @@ export default function AdminDashboardPage() {
   return (
     <section className="admin-dashboard">
       <Suspense fallback={<DashboardLoading />}>
-        <AdminDashboardData />
+        <AdminDashboardContent />
       </Suspense>
     </section>
+  );
+}
+
+async function AdminDashboardContent() {
+  await connection();
+  const actor = await requireAdminPermission("dashboard.view");
+  const canViewUsers = hasAdminPermission(
+    actor.adminPermissions,
+    "users.view",
+    actor.isSuperAdmin,
+  );
+  return (
+    <AdminDashboardData
+      adminPermissions={actor.adminPermissions}
+      canViewUsers={canViewUsers}
+      isSuperAdmin={actor.isSuperAdmin}
+    />
   );
 }

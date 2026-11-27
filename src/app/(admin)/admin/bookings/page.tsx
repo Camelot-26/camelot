@@ -1,6 +1,9 @@
+import { AdminPermissionBoundary } from "@/components/admin/admin-permission-boundary";
 import { AdminBookingManagement } from "@/components/admin/admin-booking-management";
 import { bookingStatuses, bookingTypes } from "@/lib/booking-constants";
 import { getPrisma } from "@/lib/prisma";
+
+export const instant = false;
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -27,7 +30,19 @@ function parsePage(value: string | undefined, fallback: number) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-export default async function AdminBookingsPage({
+export default function AdminBookingsPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  return (
+    <AdminPermissionBoundary permission="bookings.view">
+      <AdminBookingsContent searchParams={searchParams} />
+    </AdminPermissionBoundary>
+  );
+}
+
+async function AdminBookingsContent({
   searchParams,
 }: {
   searchParams: SearchParams;

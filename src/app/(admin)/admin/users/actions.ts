@@ -5,7 +5,9 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { Prisma } from "@/generated/prisma/client";
 import { getAuth } from "@/lib/auth";
-import { requireUserRole } from "@/lib/authorization";
+import { requireAdminPermission } from "@/lib/authorization";
+import { canAssignAdminRole } from "@/lib/admin-role-assignment";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { createSmtpTransport, sendTemporaryPasswordEmail } from "@/lib/email";
 import { getPrisma } from "@/lib/prisma";
 import { getUserImageStorage } from "@/lib/user-image-storage";
@@ -19,6 +21,7 @@ type AdminUserChanges = {
   phone: string;
   image: string;
   role: UserRole;
+  adminRoleId: string | null;
 };
 
 type ActionResult =
@@ -60,7 +63,7 @@ function isUniqueConstraintError(
 export async function updateAdminUser(
   changes: AdminUserChanges,
 ): Promise<ActionResult> {
-  await requireUserRole("admin");
+  const actor = await requireAdminPermission("users.manage");
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) {
     return { success: false, message: "Your session expired. Sign in again." };
@@ -73,7 +76,8 @@ export async function updateAdminUser(
     typeof changes.email !== "string" ||
     typeof changes.phone !== "string" ||
     typeof changes.image !== "string" ||
-    typeof changes.role !== "string"
+    typeof changes.role !== "string" ||
+    (typeof changes.adminRoleId !== "string" && changes.adminRoleId !== null)
   ) {
     return { success: false, message: "The account details are incomplete." };
   }
@@ -128,6 +132,21 @@ export async function updateAdminUser(
   if (!isUserRole(changes.role)) {
     return { success: false, message: "Select a valid account type." };
   }
+  if (changes.role !== "admin" && changes.adminRoleId !== null) {
+    return {
+      success: false,
+      message: "Only administrator accounts can have an admin role.",
+    };
+  }
+  if (
+    changes.role === "admin" &&
+    !(await canAssignAdminRole(actor, changes.adminRoleId))
+  ) {
+    return {
+      success: false,
+      message: "Select an admin role you’re allowed to assign.",
+    };
+  }
   if (changes.id === session.user.id && changes.role !== "admin") {
     return {
       success: false,
@@ -159,12 +178,31 @@ export async function updateAdminUser(
       async (transaction) => {
         const currentUser = await transaction.user.findUnique({
           where: { id: changes.id },
-          select: { role: true, email: true, image: true },
+          select: {
+            role: true,
+            email: true,
+            image: true,
+            adminRoleId: true,
+            adminRole: { select: { permissions: true } },
+          },
         });
         if (!currentUser) {
           throw new Error("This account no longer exists.");
         }
         previousImage = currentUser.image;
+
+        if (
+          !actor.isSuperAdmin &&
+          currentUser.role === "admin" &&
+          (currentUser.adminRoleId === null ||
+            !currentUser.adminRole ||
+            currentUser.adminRole.permissions.some(
+              (permission) =>
+                !hasAdminPermission(actor.adminPermissions, permission),
+            ))
+        ) {
+          throw new Error("You can’t manage an administrator with broader access.");
+        }
 
         if (currentUser.role === "admin" && changes.role !== "admin") {
           const adminCount = await transaction.user.count({
@@ -185,6 +223,8 @@ export async function updateAdminUser(
             phone: phone || null,
             image: imageToSave || null,
             role: changes.role,
+            adminRoleId:
+              changes.role === "admin" ? changes.adminRoleId : null,
           },
         });
       },
@@ -208,6 +248,12 @@ export async function updateAdminUser(
       };
     }
     if (error instanceof Error && error.message === "This account no longer exists.") {
+      return { success: false, message: error.message };
+    }
+    if (
+      error instanceof Error &&
+      error.message === "You can’t manage an administrator with broader access."
+    ) {
       return { success: false, message: error.message };
     }
     if (
@@ -243,13 +289,14 @@ export async function updateAdminUser(
 
   revalidatePath("/admin/users");
   revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/roles");
   return { success: true };
 }
 
 export async function createManagedUser(
   value: unknown,
 ): Promise<CreateManagedUserResult> {
-  await requireUserRole("admin");
+  const actor = await requireAdminPermission("users.manage");
   const requestHeaders = await headers();
   const session = await getAuth().api.getSession({ headers: requestHeaders });
   if (!session) {
@@ -260,7 +307,8 @@ export async function createManagedUser(
     typeof value.name !== "string" ||
     typeof value.email !== "string" ||
     typeof value.phone !== "string" ||
-    typeof value.role !== "string"
+    typeof value.role !== "string" ||
+    (typeof value.adminRoleId !== "string" && value.adminRoleId !== null)
   ) {
     return { success: false, message: "Enter the required account details." };
   }
@@ -271,6 +319,22 @@ export async function createManagedUser(
   const role = value.role;
   if (role !== "admin" && role !== "agent" && role !== "customer") {
     return { success: false, message: "Select a valid account type." };
+  }
+  const adminRoleId = value.adminRoleId;
+  if (
+    role === "admin" &&
+    !(await canAssignAdminRole(actor, adminRoleId))
+  ) {
+    return {
+      success: false,
+      message: "Select an admin role you’re allowed to assign.",
+    };
+  }
+  if (role !== "admin" && adminRoleId !== null) {
+    return {
+      success: false,
+      message: "Only administrator accounts can have an admin role.",
+    };
   }
   const roleLabel =
     role === "admin" ? "administrator" : role === "agent" ? "agent" : "customer";
@@ -323,6 +387,7 @@ export async function createManagedUser(
         data: {
           phone: phone || null,
           passwordChangeRequired: true,
+          ...(adminRoleId ? { adminRoleId } : {}),
         },
       },
       headers: requestHeaders,
@@ -342,6 +407,7 @@ export async function createManagedUser(
       where: { id: userId },
       data: {
         role,
+        adminRoleId: role === "admin" ? adminRoleId : null,
         phone: phone || null,
         passwordChangeRequired: true,
       },
@@ -389,7 +455,7 @@ export async function issueTemporaryPassword(
   userId: string,
   requestedPassword: string | null,
 ): Promise<PasswordResult> {
-  await requireUserRole("admin");
+  const actor = await requireAdminPermission("users.manage");
   const requestHeaders = await headers();
   const session = await getAuth().api.getSession({ headers: requestHeaders });
   if (!session) {
@@ -414,12 +480,35 @@ export async function issueTemporaryPassword(
 
   const user = await getPrisma().user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      adminRoleId: true,
+      adminRole: { select: { permissions: true } },
+    },
   });
   if (!user) {
     return {
       success: false,
       message: "This account no longer exists.",
+      passwordWasSet: false,
+    };
+  }
+  if (
+    !actor.isSuperAdmin &&
+    user.role === "admin" &&
+    (user.adminRoleId === null ||
+      !user.adminRole ||
+      user.adminRole.permissions.some(
+        (permission) =>
+          !hasAdminPermission(actor.adminPermissions, permission),
+      ))
+  ) {
+    return {
+      success: false,
+      message: "You can’t manage an administrator with broader access.",
       passwordWasSet: false,
     };
   }

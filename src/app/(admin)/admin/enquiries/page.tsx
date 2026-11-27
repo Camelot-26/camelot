@@ -7,6 +7,9 @@ import {
 } from "@/lib/enquiry-constants";
 import { EnquiryFollowupStatus } from "@/generated/prisma/client";
 import { getPrisma } from "@/lib/prisma";
+import { AdminPermissionBoundary } from "@/components/admin/admin-permission-boundary";
+
+export const instant = false;
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -28,7 +31,19 @@ function parseDate(value: string | undefined) {
     : undefined;
 }
 
-export default async function AdminEnquiriesPage({
+export default function AdminEnquiriesPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  return (
+    <AdminPermissionBoundary permission="enquiries.view">
+      <AdminEnquiriesContent searchParams={searchParams} />
+    </AdminPermissionBoundary>
+  );
+}
+
+async function AdminEnquiriesContent({
   searchParams,
 }: {
   searchParams: SearchParams;

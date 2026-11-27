@@ -20,7 +20,7 @@
 
 # production
 /build
-/.data/user-images/
+#/.data/user-images/
 
 # misc
 .DS_Store

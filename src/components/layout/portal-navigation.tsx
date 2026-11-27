@@ -5,6 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { SignOutButton } from "@/components/layout/sign-out-button";
+import {
+  getAdminPermissionForPath,
+  hasAdminPermission,
+} from "@/lib/admin-permissions";
 import type { UserRole } from "@/types";
 
 type NavigationItem = {
@@ -97,6 +101,7 @@ const navigation: Record<Exclude<UserRole, "admin">, NavigationItem[]> = {
     { href: "/agent/dashboard", icon: "dashboard", label: "Overview" },
     { href: "/agent/referrals", icon: "referral", label: "Referrals" },
     { href: "/agent/enquiries", icon: "mail", label: "Enquiries" },
+    { href: "/agent/profile", icon: "user", label: "My Profile" },
   ],
 };
 
@@ -154,8 +159,8 @@ const adminNavigation: AdminNavigationSection[] = [
     label: "Management",
     items: [
       { href: "/admin/admin-users", icon: "users", label: "Back-office User" },
-      { icon: "shield", label: "Roles" },
-      { icon: "key", label: "Permissions" },
+      { href: "/admin/roles", icon: "shield", label: "Roles" },
+      { href: "/admin/permissions", icon: "key", label: "Permissions" },
     ],
   },
   {
@@ -179,6 +184,8 @@ const adminNavigation: AdminNavigationSection[] = [
 ];
 
 export function PortalNavigation({
+  adminPermissions = [],
+  isSuperAdmin = false,
   isSidebarCollapsed = false,
   onToggleSidebar,
   role,
@@ -186,6 +193,8 @@ export function PortalNavigation({
   user,
 }: {
   isSidebarCollapsed?: boolean;
+  adminPermissions?: string[];
+  isSuperAdmin?: boolean;
   onToggleSidebar?: () => void;
   role: UserRole;
   title: string;
@@ -199,6 +208,19 @@ export function PortalNavigation({
         section.items.some((item) => item.href === pathname),
       )?.id ?? "overview",
   );
+  const visibleAdminNavigation = adminNavigation
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => {
+        if (!item.href) return true;
+        const permission = getAdminPermissionForPath(item.href);
+        return (
+          !permission ||
+          hasAdminPermission(adminPermissions, permission, isSuperAdmin)
+        );
+      }),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <aside
@@ -211,11 +233,15 @@ export function PortalNavigation({
           href="/"
           title={isSidebarCollapsed ? "Camelot home" : undefined}
         >
+          <Image
+            alt=""
+            className="portal-brand-mark"
+            height={32}
+            src="/assets/camelot-mark.png"
+            width={20}
+          />
           <span className="portal-brand-full">
             CAMELOT<span>.</span>
-          </span>
-          <span aria-hidden="true" className="portal-brand-mark">
-            C
           </span>
         </Link>
         {role !== "agent" && (
@@ -250,7 +276,7 @@ export function PortalNavigation({
           </span>
         </button>
       </div>
-      {(role === "admin" || role === "customer") && user && (
+      {(role === "admin" || role === "customer" || role === "agent") && user && (
         <div
           className="portal-sidebar-profile"
           title={isSidebarCollapsed ? user.name : undefined}
@@ -282,7 +308,7 @@ export function PortalNavigation({
           className={`portal-nav${role === "admin" ? " portal-nav-grouped" : ""}`}
         >
           {role === "admin"
-            ? adminNavigation.map((section) => {
+            ? visibleAdminNavigation.map((section) => {
                 const expanded = expandedSection === section.id;
                 const panelId = `admin-navigation-${section.id}`;
 

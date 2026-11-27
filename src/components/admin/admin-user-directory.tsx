@@ -17,8 +17,13 @@ type AdminUser = {
   phone: string | null;
   image: string | null;
   role: string;
+  adminRoleId: string | null;
+  adminRole: { name: string } | null;
+  canManage: boolean;
   createdAt: string;
 };
+
+type AdminRoleOption = { id: string; name: string };
 
 type TemporaryPassword =
   | {
@@ -34,10 +39,16 @@ type TemporaryPassword =
     };
 
 export function AdminUserDirectory({
+  adminRoles,
+  canManageUsers,
   initialRole,
+  isSuperAdmin,
   users,
 }: {
+  adminRoles: AdminRoleOption[];
+  canManageUsers: boolean;
   initialRole: string;
+  isSuperAdmin: boolean;
   users: AdminUser[];
 }) {
   const router = useRouter();
@@ -97,6 +108,7 @@ export function AdminUserDirectory({
     if (!editingUser || readingProfileImage) return;
 
     const formData = new FormData(event.currentTarget);
+    const updatedRole = String(formData.get("role") ?? "") as UserRole;
     setSaving(true);
     setEditError("");
     try {
@@ -107,7 +119,11 @@ export function AdminUserDirectory({
         phone: String(formData.get("phone") ?? ""),
         image:
           uploadedProfileImage || String(formData.get("image") ?? ""),
-        role: String(formData.get("role") ?? "") as UserRole,
+        role: updatedRole,
+        adminRoleId:
+          updatedRole === "admin"
+            ? String(formData.get("adminRoleId") ?? "") || null
+            : null,
       });
       if (!result.success) {
         setEditError(result.message);
@@ -144,6 +160,10 @@ export function AdminUserDirectory({
         email: String(formData.get("email") ?? ""),
         phone: String(formData.get("phone") ?? ""),
         role,
+        adminRoleId:
+          role === "admin"
+            ? String(formData.get("adminRoleId") ?? "") || null
+            : null,
       });
       if (!result.success) {
         if (result.userCreated) {
@@ -332,9 +352,10 @@ export function AdminUserDirectory({
         <span className="admin-directory-count">
           {filteredUsers.length} {filteredUsers.length === 1 ? "account" : "accounts"}
         </span>
-        {(initialRole === "admin" ||
-          initialRole === "agent" ||
-          initialRole === "customer") && (
+        {canManageUsers &&
+          (initialRole === "admin" ||
+            initialRole === "agent" ||
+            initialRole === "customer") && (
           <button
             className="button button-dark"
             onClick={() => {
@@ -406,7 +427,11 @@ export function AdminUserDirectory({
                   </td>
                   <td>
                     <span className={`admin-role-badge admin-role-${user.role}`}>
-                      {user.role}
+                      {user.role === "admin" && user.adminRole
+                        ? `admin · ${user.adminRole.name}`
+                        : user.role === "admin" && !user.adminRoleId
+                          ? "full admin"
+                          : user.role}
                     </span>
                   </td>
                   <td>
@@ -427,20 +452,25 @@ export function AdminUserDirectory({
                       >
                         View
                       </button>
-                      <button
-                        className="admin-directory-action"
-                        onClick={() => openEditUser(user)}
-                        type="button"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="admin-directory-action"
-                        onClick={() => openPasswordReset(user)}
-                        type="button"
-                      >
-                        Reset password
-                      </button>
+                      {canManageUsers &&
+                        user.canManage && (
+                          <>
+                            <button
+                              className="admin-directory-action"
+                              onClick={() => openEditUser(user)}
+                              type="button"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="admin-directory-action"
+                              onClick={() => openPasswordReset(user)}
+                              type="button"
+                            >
+                              Reset password
+                            </button>
+                          </>
+                        )}
                     </div>
                   </td>
                 </tr>
@@ -588,6 +618,28 @@ export function AdminUserDirectory({
                   type="tel"
                 />
               </label>
+              {initialRole === "admin" && (
+                <label>
+                  Admin role
+                  <select
+                    defaultValue={isSuperAdmin ? "" : (adminRoles[0]?.id ?? "")}
+                    name="adminRoleId"
+                    required={!isSuperAdmin}
+                  >
+                    {isSuperAdmin && (
+                      <option value="">Full administrator access</option>
+                    )}
+                    {adminRoles.map((adminRole) => (
+                      <option key={adminRole.id} value={adminRole.id}>
+                        {adminRole.name}
+                      </option>
+                    ))}
+                  </select>
+                  {!adminRoles.length && !isSuperAdmin && (
+                    <small>Create an assignable role before adding an admin user.</small>
+                  )}
+                </label>
+              )}
               <p className="admin-password-hint">
                 {initialRole === "agent"
                   ? "A temporary password will be emailed. The agent must change it when they first sign in."
@@ -611,7 +663,12 @@ export function AdminUserDirectory({
                 </button>
                 <button
                   className="button button-dark"
-                  disabled={adminUserSaving}
+                  disabled={
+                    adminUserSaving ||
+                    (initialRole === "admin" &&
+                      !isSuperAdmin &&
+                      adminRoles.length === 0)
+                  }
                   type="submit"
                 >
                   {adminUserSaving
@@ -844,6 +901,24 @@ export function AdminUserDirectory({
                   <option value="admin">Administrator</option>
                 </select>
               </label>
+              {canManageUsers && (
+                <label>
+                  Admin role
+                  <select
+                    defaultValue={editingUser.adminRoleId ?? ""}
+                    name="adminRoleId"
+                  >
+                    {isSuperAdmin && (
+                      <option value="">Full administrator access</option>
+                    )}
+                    {adminRoles.map((adminRole) => (
+                      <option key={adminRole.id} value={adminRole.id}>
+                        {adminRole.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               {editError && (
                 <p className="admin-directory-error" role="alert">
                   {editError}
